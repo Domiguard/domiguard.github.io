@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="img/icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=planes-1">
 </head>
 <body>
 <a class="skip" href="#planes">Saltar al contenido</a>
@@ -28,15 +28,28 @@
   <h2>Planes mensuales según los dominios que protegemos</h2>
   <p class="lead">Precios en dólares. Propuesta inicial, sujeta a validación con clientes piloto.</p>
   <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
-    <div class="card plan"><h3 style="margin:0">Básico</h3><div class="tiny">Hasta 3 dominios</div><div class="pr">USD 250<small> al mes</small></div><div>Detección de sitios que suplantan a tu banco, puntaje de riesgo y alertas por correo.</div></div>
-    <div class="card plan top"><h3 style="margin:0">Profesional</h3><div class="tiny">Hasta 10 dominios</div><div class="pr">USD 700<small> al mes</small></div><div>Todo lo del plan Básico, más el sello de verificación y el panel de prioridades.</div></div>
-    <div class="card plan"><h3 style="margin:0">Empresarial</h3><div class="tiny">Más de 10 dominios</div><div class="pr">Desde USD 1,500<small> al mes</small></div><div>Todo lo del plan Profesional, más acceso por API para conectar tus propios sistemas.</div></div>
+    <div class="card plan"><h3 style="margin:0">Básico</h3><div class="tiny">Hasta 3 dominios</div><div class="pr">USD 250<small> al mes</small></div><div>Detección de sitios que suplantan a tu banco, puntaje de riesgo y alertas por correo.</div><button type="button" class="btn p contratar-btn" data-plan="basico" aria-label="Contratar el plan Básico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 9.5h19" stroke="currentColor" stroke-width="1.8"/><path d="M6 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Contratar</button></div>
+    <div class="card plan top"><h3 style="margin:0">Profesional</h3><div class="tiny">Hasta 10 dominios</div><div class="pr">USD 700<small> al mes</small></div><div>Todo lo del plan Básico, más el sello de verificación y el panel de prioridades.</div><button type="button" class="btn p contratar-btn" data-plan="profesional" aria-label="Contratar el plan Profesional"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 9.5h19" stroke="currentColor" stroke-width="1.8"/><path d="M6 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Contratar</button></div>
+    <div class="card plan"><h3 style="margin:0">Empresarial</h3><div class="tiny">Más de 10 dominios</div><div class="pr">Desde USD 1,500<small> al mes</small></div><div>Todo lo del plan Profesional, más acceso por API para conectar tus propios sistemas.</div><button type="button" class="btn p contratar-btn" data-plan="empresarial" aria-label="Contratar el plan Empresarial"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="5" width="19" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.5 9.5h19" stroke="currentColor" stroke-width="1.8"/><path d="M6 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Contratar</button></div>
   </div>
+  <div id="contratar" class="contratar-caja" hidden aria-live="polite"></div>
 </div></section>
 </main>
-<section class="cta"><div class="wrap">
-  <div><h2>Mira cómo se ve una alerta</h2><p>Entra al panel con detecciones reales de BBVA y otros bancos.</p></div>
-  <a class="btn p" href="panel.html">Ver el panel del cliente</a>
+<section class="cta"><div class="wrap ejemplo">
+  <div class="ej-tx"><h2>Mira cómo se ve una alerta</h2><p>Así le llega a tu equipo cada sitio sospechoso: con su prioridad, el motivo y la evidencia para pedir la baja.</p><p class="tiny ej-nota">Detección real tomada de datos públicos. BBVA no es cliente de Domiguard ni tiene relación con el proyecto.</p></div>
+  <article class="al media ej-al" aria-label="Ejemplo de alerta">
+    <div class="al-top"><span class="pill p-mid">Prioridad media</span><span class="mono">hxxp://bbva-netcash-empr-login[.]cc</span><span class="tag">Dominio recién registrado</span><span class="tag">Por revisar</span></div>
+    <div>Usa el nombre de la marca en la dirección</div>
+    <div class="al-meta"><span>Puntaje 100</span><span>Detectado el 27 oct</span><span>Estado: Nueva</span></div>
+    <div class="ev"><div><h4>Evidencia</h4><dl>
+      <dt>Imita a</dt><dd>BBVA México</dd>
+      <dt>Dominio oficial</dt><dd>bbva.mx</dd>
+      <dt>Registrado el</dt><dd>2026-10-21</dd>
+      <dt>Registrador</dt><dd>Gname.com Pte. Ltd.</dd>
+      <dt>Correo de abuso</dt><dd>complaint@gname.com</dd>
+      <dt>Sigue activo</dt><dd>Sí, su nombre responde en DNS</dd>
+    </dl></div></div>
+  </article>
 </div></section>
 
 <footer><div class="wrap">
@@ -44,5 +57,7 @@
   <div style="max-width:560px">Proyecto académico de Inteligencia de Negocios (ADM4405). Los bancos que aparecen no son clientes ni tienen relación con el proyecto.</div>
 </div></footer>
 
+<script src="config.js"></script>
+<script src="planes.js?v=planes-1"></script>
 </body>
 </html>

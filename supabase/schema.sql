@@ -128,3 +128,18 @@ create policy "ver mi perfil" on perfiles for select to authenticated using (use
 -- insert into clientes (id, nombre, marca, palabras, dominios)
 --   values ('bbva', 'BBVA México', 'bbva', '{bbva}', '{bbva.mx,bbva.com}');
 -- insert into clientes_contacto (cliente_id, correo) values ('bbva', 'CORREO-DE-SEGURIDAD-DEL-CLIENTE');
+
+-- Solicitudes de contratación desde planes.html (pago de DEMOSTRACIÓN: no se cobra nada).
+-- La página solo puede agregar; nadie puede leerlas con la llave pública. El equipo las ve en Table Editor.
+create table if not exists solicitudes (
+  id         bigint generated always as identity primary key,
+  plan       text not null check (plan in ('basico','profesional','empresarial')),
+  empresa    text check (char_length(empresa) <= 120),
+  dominios   text[] not null check (cardinality(dominios) between 1 and 100),
+  correo     text not null check (char_length(correo) <= 254 and correo ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
+  estado     text not null default 'nueva' check (estado in ('nueva','en_revision','activa','descartada')),
+  creada_en  timestamptz not null default now()
+);
+alter table solicitudes enable row level security;
+drop policy if exists "enviar solicitud" on solicitudes;
+create policy "enviar solicitud" on solicitudes for insert to anon, authenticated with check (estado = 'nueva');
