@@ -6,6 +6,7 @@ Corre cada hora completa y cada 5 minutos en modo rápido (--rapida: solo el pas
 1. Descarga la lista pública de PhishHunt (dominio público, CC0) y la guarda en la base.
 2. Camino A: compara esos sitios con las marcas y dominios de cada cliente.
 3. Camino B: genera variantes de los dominios oficiales de cada cliente y pregunta por DNS cuáles existen.
+   Camino C (corrida completa, cuando cambia la lista): dominios registrados en los últimos 10 días que usan la marca.
 4. Para cada hallazgo nuevo consulta el registro del dominio (RDAP), calcula puntaje y prioridad
    y arma el paquete de evidencia.
 5. Envía a cada cliente un correo con sus alertas nuevas y un CSV adjunto.
@@ -43,6 +44,10 @@ FEED_URL = "https://phishunt.io/feed.json"
 # Segunda fuente de reportes: Phishing.Database (MIT), dominios nuevos de hoy, desde su repositorio en GitHub
 # (phish.co.za respondía 503). Si cambia, la corrida sigue sin esta fuente y deja un aviso en el registro.
 PD_URL = "https://raw.githubusercontent.com/Phishing-Database/Phishing.Database/master/phishing-domains-NEW-today.txt"
+# Tercera fuente (camino C): dominios registrados en los últimos 10 días, de la base gratuita de WhoisDS publicada en
+# github.com/cenk/nrd (se actualiza una vez al día; WhoisDS permite reutilizarla, también con fines comerciales).
+NRD_URL = "https://raw.githubusercontent.com/cenk/nrd/main/nrd-last-10-days.txt"
+NRD_DIAS = 10
 RAIZ = Path(__file__).resolve().parent.parent
 MODELO = json.loads((RAIZ / "web" / "model.json").read_text(encoding="utf-8"))
 ACORTADORES = {"bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd"}
@@ -158,6 +163,32 @@ def leer_phishing_database(archivo=None, maximo=20000):
     return hosts[:maximo]
 
 
+def version_nrd():
+    """Versión (ETag) de la lista de dominios recién registrados, sin descargarla. None si no responde."""
+    try:
+        req = urllib.request.Request(NRD_URL, headers=UA, method="HEAD")
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.headers.get("ETag")
+    except Exception as e:
+        print("Aviso: no se pudo consultar la lista de dominios recién registrados:", e)
+        return None
+
+
+def leer_nrd(archivo=None):
+    """Dominios registrados en los últimos 10 días (unos 700 mil). Si falla devuelve [] (no detiene la corrida)."""
+    try:
+        if archivo:
+            txt = Path(archivo).read_text(encoding="utf-8", errors="ignore")
+        else:
+            req = urllib.request.Request(NRD_URL, headers=UA)
+            with urllib.request.urlopen(req, timeout=120) as r:
+                txt = r.read().decode("utf-8", errors="ignore")
+    except Exception as e:
+        print("Aviso: no se pudo leer la lista de dominios recién registrados:", e)
+        return []
+    return [l.strip().lower() for l in txt.splitlines() if l.strip() and not l.startswith("#")]
+
+
 def a_fila(reg, hoy):
     url = reg.get("url") or reg.get("domain")
     if not url:
@@ -205,10 +236,11 @@ def dias_desde(fecha_iso, hoy):
         return None
 
 
-def construir_alerta(sitio, cliente, coin, canal, en_fuente, resuelve, hoy, whois=None):
-    """Arma la fila de `alertas` (puntaje, prioridad y evidencia incluidos)."""
+def construir_alerta(sitio, cliente, coin, canal, en_fuente, resuelve, hoy, whois=None, edad_maxima=None):
+    """Arma la fila de `alertas` (puntaje, prioridad y evidencia incluidos).
+    edad_maxima: si no hay fecha de registro pero se sabe que es reciente (camino C: 10 días o menos)."""
     w = whois or {}
-    edad = dias_desde(w["registrado"], hoy) if w.get("registrado") else None
+    edad = dias_desde(w["registrado"], hoy) if w.get("registrado") else edad_maxima
     pts = puntaje(sitio["x"], edad) if edad is not None else sitio["puntaje"]
     prio = D.prioridad(coin, pts, en_fuente, resuelve, edad)
     evid = D.evidencia(sitio, coin, cliente, prio, w)
@@ -216,6 +248,8 @@ def construir_alerta(sitio, cliente, coin, canal, en_fuente, resuelve, hoy, whoi
     evid["confirmacion"] = "fuente" if en_fuente else "revisar"
     if whois is not None:                 # ya se consultó el registro (aunque no haya devuelto datos)
         evid["rdap_revisado"] = hoy
+    if canal == "nuevo_registro":
+        evid["fuente_registro"] = f"Lista pública de dominios registrados en los últimos {NRD_DIAS} días (WhoisDS)"
     return {
         "id": f"{cliente['id']}:{sitio['id']}",
         "cliente_id": cliente["id"],
@@ -235,6 +269,7 @@ def construir_alerta(sitio, cliente, coin, canal, en_fuente, resuelve, hoy, whoi
         "enviada_en": None,
         "evidencia": evid,
         "_coin": coin,
+        "_edad_maxima": edad_maxima,
     }
 
 
@@ -290,6 +325,43 @@ def alertas_desde_variantes(clientes, hoy, resolver, maximo=900, limite_seg=240)
     return list(sitios.values()), alertas, vigiladas
 
 
+def alertas_desde_registros(dominios, clientes, hoy, resolver):
+    """Camino C: dominios recién registrados que usan la marca o el nombre del dominio oficial.
+
+    Con 700 mil dominios primero va un filtro rápido por texto (la marca o el nombre oficial dentro del dominio,
+    con letras confundibles igualadas) y solo a los que pasan se les aplica la regla completa y se revisan por DNS.
+    Los errores de una letra sin la marca completa (santnder-login) no pasan el filtro: esos los cubre el camino B.
+    Devuelve (sitios_nuevos, alertas)."""
+    claves = {}
+    for c in clientes:
+        ks = {D.esqueleto(p) for p in (c.get("palabras") or [c["marca"]]) if p and len(p) >= 4}
+        ks |= {D.esqueleto(D.registrable(d)[0]) for d in c["dominios"]}
+        claves[c["id"]] = [k for k in ks if len(k) >= 4]
+    hallados = []
+    for h in dominios:
+        sk = D.esqueleto(h.replace(".", ""))
+        for c in clientes:
+            if any(k in sk for k in claves[c["id"]]):
+                coin = D.coincidencia(h, None, c)
+                if coin:
+                    hallados.append((c, h, coin))
+    dns = {}
+    with ThreadPoolExecutor(max_workers=24) as ex:          # ¿ya existe en DNS? (no se contacta el sitio)
+        futs = {ex.submit(resolver, h): h for h in {h for _, h, _ in hallados}}
+        for fut in as_completed(futs):
+            dns[futs[fut]] = fut.result()
+    sitios, alertas = {}, []
+    for c, h, coin in hallados:
+        x = columnas_excel("https://" + h)
+        s = sitios.get(id_de(h)) or {
+            "id": id_de(h), "host": h, "marca": c["marca"], "pais": None, "asn": "", "cert": None,
+            "visto_en": datetime.now(timezone.utc).isoformat(), "primer_dia": hoy, "ultimo_dia": hoy,
+            "puntaje": puntaje(x), "tls": None, "fuente": "nuevo_registro", "dns_ok": dns.get(h), "x": x}
+        sitios[s["id"]] = s
+        alertas.append(construir_alerta(s, c, coin, "nuevo_registro", False, dns.get(h), hoy, edad_maxima=NRD_DIAS))
+    return list(sitios.values()), alertas
+
+
 def enriquecer(alertas, sitios_por_id, clientes_por_id, hoy, maximo=40):
     """Consulta RDAP (edad del dominio, registrador, correo de abuso) y recalcula puntaje y prioridad."""
     hechas = 0
@@ -300,7 +372,7 @@ def enriquecer(alertas, sitios_por_id, clientes_por_id, hoy, maximo=40):
         hechas += 1
         s = sitios_por_id[a["sitio_id"]]
         nueva = construir_alerta(s, clientes_por_id[a["cliente_id"]], a["_coin"], a["canal"],
-                                 a["canal"] == "reporte", a["dns_ok"], hoy, w)
+                                 a["canal"] == "reporte", a["dns_ok"], hoy, w, a.get("_edad_maxima"))
         alertas[i] = nueva
     return hechas
 
@@ -599,16 +671,32 @@ def main():
         filas += [f for f in filas_pd if f["id"] not in {x["id"] for x in filas}]
         alertas = alertas_desde_fuente(filas, clientes, hoy)
         sitios_b, alertas_b, vigiladas = alertas_desde_variantes(clientes, hoy, resuelve)
+        # Camino C, solo en la corrida completa y cuando la lista cambia (más o menos una vez al día)
+        sitios_c, alertas_c, nrd = [], [], {}
+        if not a.rapida:
+            version = version_nrd()
+            if version and version != db.estado_actual().get("nrd_version"):
+                lista = leer_nrd()
+                if lista:
+                    sitios_c, alertas_c = alertas_desde_registros(lista, clientes, hoy, resuelve)
+                    nrd = {"nrd_version": version, "nrd_revisados": len(lista), "nrd_hallados": len(alertas_c),
+                           "nrd_revisado_en": datetime.now(timezone.utc).isoformat()}
+                    print(f"Dominios recién registrados: {len(lista)} revisados, {len(alertas_c)} coinciden con clientes")
         existentes = db.ids("sitios")
-        db.insertar("sitios", [s for s in sitios_b if s["id"] not in existentes])
-        alertas += alertas_b
+        nuevos_bc = {s["id"]: s for s in sitios_b + sitios_c if s["id"] not in existentes}
+        db.insertar("sitios", list(nuevos_bc.values()))
+        alertas += alertas_b + alertas_c
         for c in clientes:
             db.actualizar("clientes", [c["id"]], {"variantes_vigiladas": vigiladas.get(c["id"], 0)})
 
         # 3. solo lo que no se había alertado antes
         ya = db.ids("alertas")
-        alertas_nuevas = [x for x in alertas if x["id"] not in ya]
-        por_sitio = {s["id"]: s for s in filas + sitios_b}
+        alertas_nuevas, vistas = [], set()        # un mismo dominio puede salir por dos caminos: cuenta una vez
+        for x in alertas:
+            if x["id"] not in ya and x["id"] not in vistas:
+                vistas.add(x["id"])
+                alertas_nuevas.append(x)
+        por_sitio = {s["id"]: s for s in filas + sitios_b + sitios_c}
         hechas = enriquecer(alertas_nuevas, por_sitio, por_cliente, hoy, a.max_rdap)
         db.insertar("alertas", [para_base(x) for x in alertas_nuevas])
         # Las variantes de corridas anteriores: baja mientras no tengan registro, y se completa poco a poco.
@@ -653,8 +741,10 @@ def main():
                  "correos_enviados": enviados,
                  "variantes_vigiladas": sum(vigiladas.values()),
                  "total": db.total()}
+        datos.update(nrd)
         if not a.rapida:
-            datos.update({"fuente": "PhishHunt (CC0), Phishing.Database (MIT) y búsqueda de variantes por DNS",
+            datos.update({"fuente": "PhishHunt (CC0), Phishing.Database (MIT), dominios recién registrados (WhoisDS) "
+                                    "y búsqueda de variantes por DNS",
                           "ultima_completa": datos["ultima_corrida"],
                           "nuevos": len(nuevos),
                           "dns_caidos": sum(1 for _, ok in dns_a if not ok)})

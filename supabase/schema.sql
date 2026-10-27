@@ -48,7 +48,7 @@ create table if not exists alertas (
   cliente_id    text not null references clientes(id) on delete cascade,
   sitio_id      text,
   host          text not null,
-  canal         text not null check (canal in ('reporte','busqueda')),
+  canal         text not null,           -- reporte, busqueda, nuevo_registro o certificado (ver regla abajo)
   motivo        text,
   similitud     int,
   prioridad     text not null check (prioridad in ('alta','media','baja')),
@@ -67,6 +67,10 @@ create table if not exists alertas (
 );
 -- Para bases creadas antes de esta columna (no hace nada si ya existe):
 alter table alertas add column if not exists detectada_en timestamptz not null default now();
+-- Canales de detección permitidos (se puede correr de nuevo sin problema)
+alter table alertas drop constraint if exists alertas_canal_check;
+alter table alertas add constraint alertas_canal_check
+  check (canal in ('reporte','busqueda','nuevo_registro','certificado'));
 create index if not exists alertas_cliente_idx on alertas (cliente_id, creada_en desc);
 create index if not exists alertas_detectada_idx on alertas (detectada_en desc);
 

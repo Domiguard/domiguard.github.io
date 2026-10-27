@@ -113,10 +113,13 @@ def coincidencia(host, marca_fuente, cliente):
         return mejor
 
     # 2. Usa el nombre de la marca dentro del dominio
-    for p in palabras:
+    crudas = [p.lower() for p in (cliente.get("palabras") or [cliente["marca"]]) if p]
+    for p, cruda in zip(palabras, crudas):
         if len(p) < 3:
             continue
-        en_partes = any(sp == p for sp in sk_partes)
+        # Nombres cortos (bbva, hsbc): la parte debe ser la marca tal cual. Igualando letras confundibles
+        # (8 por b, 4 por a) salen coincidencias al azar entre cientos de miles de dominios.
+        en_partes = any(sp == cruda for sp in partes) if len(p) < 5 else any(sp == p for sp in sk_partes)
         en_texto = len(p) >= 5 and p in sk_host
         if en_partes or en_texto:
             return {"tipo": "marca_en_dominio", "dist": None, "similitud": 70, "oficial": cliente["dominios"][0],
