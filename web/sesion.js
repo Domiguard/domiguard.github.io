@@ -14,6 +14,24 @@
   var actual = leer();
   function guardar(s) { actual = s; try { if (s) localStorage.setItem(CLAVE, JSON.stringify(s)); else localStorage.removeItem(CLAVE); } catch (e) {} }
 
+  /* Al confirmar el correo, Supabase regresa a esta página con la sesión en la dirección (#access_token=...):
+     se guarda y se limpia la dirección para que la llave no quede a la vista. */
+  var errorEnlace = "";
+  (function desdeEnlace() {
+    var h = new URLSearchParams(location.hash.replace(/^#/, ""));
+    if (!h.get("access_token") && !h.get("error")) return;
+    if (h.get("access_token")) {
+      var correo = "";
+      try { correo = JSON.parse(atob(h.get("access_token").split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).email || ""; } catch (e) {}
+      guardar({ access_token: h.get("access_token"), refresh_token: h.get("refresh_token"), correo: correo,
+                expira: Number(h.get("expires_at")) || Math.floor(Date.now() / 1000) + (Number(h.get("expires_in")) || 3600) });
+    } else {
+      errorEnlace = /expired|invalid/i.test(h.get("error_description") || "") ? "El enlace de confirmación ya venció o ya se usó. Inicia sesión; si no puedes, crea la cuenta de nuevo."
+                                                                              : "No se pudo confirmar el correo. Vuelve a intentarlo.";
+    }
+    history.replaceState(null, "", location.pathname + location.search);
+  })();
+
   var MENSAJES = [
     [/invalid login credentials/i, "El correo o la contraseña no coinciden."],
     [/already registered|already been registered|user already exists/i, "Ya existe una cuenta con ese correo. Inicia sesión."],
@@ -63,7 +81,9 @@
   }
   function entrar(correo, clave) { return auth("/token?grant_type=password", { email: correo, password: clave }).then(function (d) { guardar(aSesion(d)); return actual; }); }
   function registrar(correo, clave) {
-    return auth("/signup", { email: correo, password: clave })
+    /* el enlace del correo de confirmación regresa a esta misma página (debe estar en Supabase > URL Configuration) */
+    var regreso = location.origin + location.pathname;
+    return auth("/signup?redirect_to=" + encodeURIComponent(regreso), { email: correo, password: clave })
       .then(function (d) { var s = aSesion(d); if (s) guardar(s); return s; });   // sin sesión si Supabase pide confirmar el correo
   }
   function salir() { var s = actual; guardar(null); if (s) auth("/logout", {}, s.access_token).catch(function () {}); location.reload(); }
@@ -99,7 +119,7 @@
       var p = modo === "crear" ? registrar(correo, clave) : entrar(correo, clave);
       p.then(function (s) {
         if (s) { alEntrar(); return; }
-        aviso.className = "msg ok"; aviso.textContent = "Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión."; aviso.hidden = false; btn.disabled = false;
+        aviso.className = "msg ok"; aviso.textContent = "Cuenta creada. Te mandamos un correo a " + correo + ": abre el enlace para confirmarla y entrarás a tu panel. Si no lo ves, revisa la carpeta de spam."; aviso.hidden = false; btn.disabled = false;
       }).catch(function (err) { aviso.className = "msg no"; aviso.textContent = err.message; aviso.hidden = false; btn.disabled = false; });
     };
     card.appendChild(form); caja.appendChild(card);
@@ -118,6 +138,7 @@
     function sinSesion() {
       contenido.hidden = true; caja.hidden = false; if (estado) estado.textContent = "";
       formulario(caja, [], "entrar", revisar);
+      if (errorEnlace) { var a = caja.querySelector("[role=alert]"); a.className = "msg no"; a.textContent = errorEnlace; a.hidden = false; errorEnlace = ""; }
     }
     function revisar() {
       vigente().then(function (s) {
