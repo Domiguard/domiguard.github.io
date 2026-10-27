@@ -506,7 +506,9 @@ def main():
         print(f"Alertas por reportes: {len(al)} (en seco: no se consulta DNS ni RDAP ni se envía correo)")
         return 0
 
-    url, llave = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_KEY")
+    # strip(): al pegar un secreto en GitHub es fácil que se cuele un espacio o salto de línea al final
+    url = (os.environ.get("SUPABASE_URL") or "").strip()
+    llave = (os.environ.get("SUPABASE_SERVICE_KEY") or "").strip()
     if not url or not llave:
         print("Faltan SUPABASE_URL y SUPABASE_SERVICE_KEY", file=sys.stderr)
         return 2
