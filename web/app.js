@@ -31,7 +31,7 @@
     var c = clienteActual(); if (!c) return;
     var box = $("m-dominios"); box.textContent = "";
     (c.dominios || []).forEach(function (d) { var s = el("span", "tag mono", d); box.appendChild(s); });
-    $("m-vigiladas").textContent = c.variantes_vigiladas ? "Cada día revisamos " + nf(c.variantes_vigiladas) + " variantes de estos dominios (letras cambiadas, guiones, otras terminaciones)." : "";
+    $("m-vigiladas").textContent = c.variantes_vigiladas ? "Cada 5 minutos revisamos " + nf(c.variantes_vigiladas) + " variantes de estos dominios (letras cambiadas, guiones, otras terminaciones)." : "";
   }
   function renderKpis() {
     var mias = delCliente(), L = ultimoDia();
