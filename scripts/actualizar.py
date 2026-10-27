@@ -214,6 +214,8 @@ def construir_alerta(sitio, cliente, coin, canal, en_fuente, resuelve, hoy, whoi
     evid = D.evidencia(sitio, coin, cliente, prio, w)
     # "fuente": un reporte externo ya lo señala como phishing. "revisar": existe y se parece, pero nadie lo ha reportado.
     evid["confirmacion"] = "fuente" if en_fuente else "revisar"
+    if whois is not None:                 # ya se consultó el registro (aunque no haya devuelto datos)
+        evid["rdap_revisado"] = hoy
     return {
         "id": f"{cliente['id']}:{sitio['id']}",
         "cliente_id": cliente["id"],
@@ -296,13 +298,42 @@ def enriquecer(alertas, sitios_por_id, clientes_por_id, hoy, maximo=40):
             break
         w = D.rdap(a["host"])
         hechas += 1
-        if not w:
-            continue
         s = sitios_por_id[a["sitio_id"]]
         nueva = construir_alerta(s, clientes_por_id[a["cliente_id"]], a["_coin"], a["canal"],
                                  a["canal"] == "reporte", a["dns_ok"], hoy, w)
         alertas[i] = nueva
     return hechas
+
+
+def coin_guardado(a):
+    """La coincidencia tal como quedó guardada en la alerta (cuando ya no se puede recalcular)."""
+    e = a.get("evidencia") or {}
+    return {"tipo": e.get("tipo") or "fuente", "similitud": a.get("similitud"), "oficial": e.get("oficial"),
+            "plataforma": e.get("plataforma"), "motivo": a.get("motivo")}
+
+
+def completar_registro(db, clientes_por_id, hoy, maximo=40):
+    """Alertas ya guardadas que necesitan el registro del dominio (RDAP):
+    - variantes (camino B) que todavía no lo tienen: se consultan hasta `maximo` por corrida, las más nuevas primero;
+    - alertas en plataformas gratuitas que traen el registro del servicio (p. ej. duckdns): se les quita.
+    Con eso se recalculan puntaje, prioridad y evidencia."""
+    lote = [a for a in db.con_registro() if D.registrable(a["host"])[2]]
+    if maximo > 0:
+        lote += db.pendientes_rdap(maximo)
+    if not lote:
+        return 0
+    sitios = db.sitios_por_id({a["sitio_id"] for a in lote})
+    n = 0
+    for a in lote:
+        c, s = clientes_por_id.get(a["cliente_id"]), sitios.get(a["sitio_id"])
+        if not c or not s:
+            continue
+        w = D.rdap(a["host"])                  # en plataformas devuelve {} sin consultar
+        coin = D.coincidencia(a["host"], None, c) or coin_guardado(a)
+        nueva = construir_alerta(s, c, coin, a["canal"], a["canal"] == "reporte", a.get("dns_ok"), hoy, w)
+        db.actualizar("alertas", [a["id"]], {k: nueva[k] for k in ("motivo", "similitud", "prioridad", "puntaje", "evidencia")})
+        n += 1
+    return n
 
 
 def para_base(a):
@@ -417,6 +448,29 @@ class Base:
         out = {}
         for r in self._pedir("GET", "/clientes_contacto?select=cliente_id,correo"):
             out.setdefault(r["cliente_id"], []).append(r["correo"])
+        return out
+
+    def pendientes_rdap(self, limite):
+        """Variantes (camino B) a las que todavía no se les consulta el registro del dominio."""
+        return self._pedir("GET", "/alertas?select=*&canal=eq.busqueda&evidencia->>rdap_revisado=is.null"
+                                  f"&order=creada_en.desc&limit={limite}")
+
+    def con_registro(self):
+        """Alertas que traen registrador pero ninguna plataforma anotada (para corregir las de DNS dinámico)."""
+        return self._pedir("GET", "/alertas?select=*&evidencia->>registrador=not.is.null"
+                                  "&evidencia->>plataforma=is.null&limit=1000")
+
+    def rebajar_variantes_sin_registro(self):
+        """Regla de prioridad: una variante sin registro consultado no tiene señales, así que va en baja."""
+        self._pedir("PATCH", "/alertas?canal=eq.busqueda&prioridad=neq.baja&evidencia->>rdap_revisado=is.null",
+                    {"prioridad": "baja"}, {"Prefer": "return=minimal"})
+
+    def sitios_por_id(self, ids):
+        out, ids = {}, list(ids)
+        for i in range(0, len(ids), 40):
+            lista = ",".join('"' + x + '"' for x in ids[i:i+40])
+            for s in self._pedir("GET", "/sitios?select=*&id=in.(" + urllib.parse.quote(lista, safe='(),"') + ")"):
+                out[s["id"]] = s
         return out
 
     def para_revisar_dns(self, tabla, filtro, limite=300):
@@ -555,8 +609,12 @@ def main():
         ya = db.ids("alertas")
         alertas_nuevas = [x for x in alertas if x["id"] not in ya]
         por_sitio = {s["id"]: s for s in filas + sitios_b}
-        enriquecer(alertas_nuevas, por_sitio, por_cliente, hoy, a.max_rdap)
+        hechas = enriquecer(alertas_nuevas, por_sitio, por_cliente, hoy, a.max_rdap)
         db.insertar("alertas", [para_base(x) for x in alertas_nuevas])
+        # Las variantes de corridas anteriores: baja mientras no tengan registro, y se completa poco a poco.
+        db.rebajar_variantes_sin_registro()
+        completadas = completar_registro(db, por_cliente, hoy, a.max_rdap - hechas)
+        print(f"Registro (RDAP): {hechas} alertas nuevas y {completadas} anteriores revisadas")
 
         # 4. correo a cada cliente
         contactos, mensajes, avisadas = db.contactos(), [], []

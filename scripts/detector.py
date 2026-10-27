@@ -19,10 +19,14 @@ UA = {"User-Agent": "Domiguard-proyecto-academico/1.0", "Accept": "application/r
 # Sufijos de dos partes frecuentes (para encontrar el dominio registrable sin depender de una lista externa).
 SEGUNDO_NIVEL = {"com", "org", "net", "gob", "edu", "co", "gov", "ac", "or", "ne"}
 # Plataformas gratuitas: el sitio falso vive en un subdominio y la baja se pide a la plataforma.
+# Incluye DNS dinámico (duckdns, no-ip...) y túneles: su registro RDAP es el del servicio, no el del sitio falso.
 PLATAFORMAS = (
     "vercel.app", "blogspot.com", "netlify.app", "github.io", "pages.dev", "web.app", "firebaseapp.com",
     "herokuapp.com", "weebly.com", "wixsite.com", "typedream.app", "glitch.me", "onrender.com",
     "workers.dev", "000webhostapp.com", "webflow.io", "framer.app", "carrd.co", "godaddysites.com",
+    "duckdns.org", "ddns.net", "hopto.org", "zapto.org", "sytes.net", "no-ip.biz", "no-ip.org", "dynu.net",
+    "freeddns.org", "ngrok-free.app", "ngrok.io", "trycloudflare.com", "r2.dev", "azurewebsites.net",
+    "appspot.com", "replit.app", "repl.co", "surge.sh", "wordpress.com", "dothome.co.kr",
 )
 PALABRAS_TIPICAS = ["seguro", "login", "acceso", "verifica", "soporte", "app", "clientes", "banca", "online"]
 TERMINACIONES = ["com", "net", "org", "mx", "co", "online", "xyz", "info", "site", "top"]
@@ -130,18 +134,24 @@ def coincidencia(host, marca_fuente, cliente):
 
 def prioridad(coin, puntaje, en_fuente, resuelve, edad_dias=None):
     """alta / media / baja. Reglas simples y explicables:
-    alta   un reporte externo lo señala y el modelo también lo ve riesgoso (55 o más), o el modelo da 70 o más,
-           o es un dominio casi idéntico al oficial, existe y se registró hace 60 días o menos.
-    media  lo señala un reporte externo, o se parece al oficial / usa la marca pero sin más señales.
-    baja   el resto."""
+    Con reporte externo (camino A):
+      alta   el modelo da 70 o más, o se parece al oficial / usa la marca y el modelo da 55 o más.
+      media  el resto.
+    Sin reporte, la variante solo existe en DNS (camino B):
+      alta   se parece al oficial (o es otra terminación), existe y se registró hace 60 días o menos.
+      media  usa la marca y se registró hace 60 días o menos.
+      baja   sin esas señales: puede ser una compra defensiva del banco o un dominio ajeno de años."""
     parecido = coin["tipo"] in ("parecido", "otra_terminacion")
-    if puntaje >= 70:
+    if en_fuente:
+        if puntaje >= 70:
+            return "alta"
+        if coin["tipo"] in ("parecido", "marca_en_dominio", "otra_terminacion") and puntaje >= 55:
+            return "alta"
+        return "media"
+    reciente = edad_dias is not None and edad_dias <= 60
+    if parecido and resuelve and reciente:
         return "alta"
-    if en_fuente and coin["tipo"] in ("parecido", "marca_en_dominio", "otra_terminacion") and puntaje >= 55:
-        return "alta"
-    if parecido and resuelve and edad_dias is not None and edad_dias <= 60:
-        return "alta"
-    if en_fuente or parecido or coin["tipo"] == "marca_en_dominio":
+    if reciente:
         return "media"
     return "baja"
 
