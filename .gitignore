@@ -1,0 +1,6 @@
+# Solo para ver la página en tu Mac (no se sube a GitHub)
+.claude/
+# Archivos que crean macOS y Python
+.DS_Store
+__pycache__/
+*.pyc

@@ -1,0 +1,73 @@
+[
+ {
+  "id": "bbva",
+  "nombre": "BBVA México",
+  "marca": "bbva",
+  "palabras": [
+   "bbva"
+  ],
+  "dominios": [
+   "bbva.mx",
+   "bbva.com"
+  ],
+  "destacado": true
+ },
+ {
+  "id": "santander",
+  "nombre": "Santander México",
+  "marca": "santander",
+  "palabras": [
+   "santander"
+  ],
+  "dominios": [
+   "santander.com.mx",
+   "santander.com"
+  ]
+ },
+ {
+  "id": "hsbc",
+  "nombre": "HSBC México",
+  "marca": "hsbc",
+  "palabras": [
+   "hsbc"
+  ],
+  "dominios": [
+   "hsbc.com.mx",
+   "hsbc.com"
+  ]
+ },
+ {
+  "id": "paypal",
+  "nombre": "PayPal",
+  "marca": "paypal",
+  "palabras": [
+   "paypal"
+  ],
+  "dominios": [
+   "paypal.com",
+   "paypal.me"
+  ]
+ },
+ {
+  "id": "binance",
+  "nombre": "Binance",
+  "marca": "binance",
+  "palabras": [
+   "binance"
+  ],
+  "dominios": [
+   "binance.com"
+  ]
+ },
+ {
+  "id": "banorte",
+  "nombre": "Banorte",
+  "marca": "banorte",
+  "palabras": [
+   "banorte"
+  ],
+  "dominios": [
+   "banorte.com"
+  ]
+ }
+]

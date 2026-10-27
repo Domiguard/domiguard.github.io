@@ -1,0 +1,29 @@
+name: Actualización diaria
+
+on:
+  schedule:
+    - cron: "15 11 * * *"      # 11:15 UTC = 5:15 am en Mérida (UTC-6 todo el año); deja margen si GitHub se retrasa
+  workflow_dispatch: {}         # permite correrlo a mano desde la pestaña Actions
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dnstwist (generador de variantes)
+        run: python -m pip install -r requirements.txt
+      - name: Buscar sitios que suplantan a los clientes y avisarles
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          # Correo de alertas (opcional: sin estos secretos las alertas solo aparecen en el panel)
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+        run: python scripts/actualizar.py
