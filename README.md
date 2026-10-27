@@ -15,7 +15,7 @@ data/        phishing_dataset.csv (las 88,647 URLs de tu Excel) y clientes_demo.
 
 Domiguard busca solo los sitios que suplantan a cada cliente y se los entrega con evidencia. El cliente decide si los da de baja. Domiguard no contacta ni tumba ningún sitio.
 
-Todos los días a las 5:15 am (hora de Mérida), GitHub Actions corre `scripts/actualizar.py`:
+GitHub Actions corre `scripts/actualizar.py` cada hora, al minuto 15 (incluye las 5:15 am de Mérida), y además cada 5 minutos en modo rápido (`--rapida`: solo el camino B, variantes por DNS). Nunca corren dos a la vez. El panel vuelve a leer la base cada 5 minutos. La corrida completa hace:
 
 1. **Camino A, reportes.** Baja la lista pública de PhishHunt (dominio público, CC0) y revisa cuáles sitios nombran o imitan a un cliente.
 2. **Camino B, búsqueda activa.** Para cada dominio oficial de un cliente genera variantes (letra omitida, repetida o cambiada, 1 por l, 0 por o, guiones, "seguro", "login", otras terminaciones) y pregunta por DNS cuáles ya existen. Esto encuentra sitios que ninguna lista ha reportado todavía.

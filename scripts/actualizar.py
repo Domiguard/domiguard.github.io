@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Corrida diaria de Domiguard: encuentra sitios que suplantan a los clientes y les manda la alerta.
+"""Corrida de Domiguard: encuentra sitios que suplantan a los clientes y les manda la alerta.
+
+Corre cada hora completa y cada 5 minutos en modo rápido (--rapida: solo el paso 3, variantes por DNS).
 
 1. Descarga la lista pública de PhishHunt (dominio público, CC0) y la guarda en la base.
 2. Camino A: compara esos sitios con las marcas y dominios de cada cliente.
@@ -480,11 +482,14 @@ def main():
     ap.add_argument("--seco", action="store_true", help="no escribir en la base; solo mostrar")
     ap.add_argument("--max", type=int, default=2000, help="máximo de registros por corrida")
     ap.add_argument("--max-rdap", type=int, default=40, help="máximo de consultas RDAP por corrida")
+    ap.add_argument("--rapida", action="store_true",
+                    help="solo búsqueda de variantes por DNS (sin reportes públicos ni revisión de alertas abiertas)")
     a = ap.parse_args()
 
     ahora = datetime.now(TZ)
     hoy = ahora.date().isoformat()
-    registros = leer_feed(a.archivo)[: a.max]
+    # En la búsqueda rápida (cada 5 minutos) no se bajan los reportes públicos: cambian poco y son servicios gratuitos.
+    registros = [] if a.rapida else leer_feed(a.archivo)[: a.max]
     filas = {}
     for r in registros:
         f = a_fila(r, hoy)
@@ -518,7 +523,7 @@ def main():
         # 2. alertas por cliente (camino A y camino B)
         clientes = db.clientes()
         por_cliente = {c["id"]: c for c in clientes}
-        filas_pd = filas_que_tocan_clientes(leer_phishing_database(), clientes, hoy, "phishing-database")
+        filas_pd = [] if a.rapida else filas_que_tocan_clientes(leer_phishing_database(), clientes, hoy, "phishing-database")
         existentes = db.ids("sitios")
         db.insertar("sitios", [f for f in filas_pd if f["id"] not in existentes])
         filas += [f for f in filas_pd if f["id"] not in {x["id"] for x in filas}]
@@ -550,30 +555,38 @@ def main():
         if enviados:
             db.actualizar("alertas", avisadas, {"estado": "enviada", "enviada_en": datetime.now(timezone.utc).isoformat()})
 
-        # 5. ¿siguen vivos? (solo DNS)
-        reciente = (ahora.date() - timedelta(days=3)).isoformat()
-        abiertas = db.para_revisar_dns("alertas", "estado=in.(nueva,enviada,en_baja)")
-        dns_a = revisar_dns(abiertas)
-        db.guardar_dns("alertas", dns_a)
-        dns_s = revisar_dns(db.para_revisar_dns("sitios", f"ultimo_dia=gte.{reciente}", 200))
-        db.guardar_dns("sitios", dns_s)
+        # 5. ¿siguen vivos? (solo DNS; en la búsqueda rápida se deja para la corrida completa)
+        dns_a = []
+        if not a.rapida:
+            reciente = (ahora.date() - timedelta(days=3)).isoformat()
+            abiertas = db.para_revisar_dns("alertas", "estado=in.(nueva,enviada,en_baja)")
+            dns_a = revisar_dns(abiertas)
+            db.guardar_dns("alertas", dns_a)
+            dns_s = revisar_dns(db.para_revisar_dns("sitios", f"ultimo_dia=gte.{reciente}", 200))
+            db.guardar_dns("sitios", dns_s)
 
+        # Se conservan los datos de la última corrida completa; un error anterior se borra porque esta salió bien.
         previo = db.estado_actual()
-        db.estado({
-            "ultima_corrida": datetime.now(timezone.utc).isoformat(),
-            "dia": hoy,
-            "etiqueta": f"{ahora.day} {MESES[ahora.month-1]} {ahora.year}, {ahora:%H:%M} (hora de Mérida)",
-            "fuente": "PhishHunt (CC0), Phishing.Database (MIT) y búsqueda de variantes por DNS",
-            "corridas": int(previo.get("corridas", 0)) + 1,
-            "nuevos": len(nuevos),
-            "alertas_nuevas": len(alertas_nuevas),
-            "correos_enviados": enviados,
-            "variantes_vigiladas": sum(vigiladas.values()),
-            "dns_caidos": sum(1 for _, ok in dns_a if not ok),
-            "total": db.total(),
-        })
-        print(f"Sitios nuevos: {len(nuevos)}  Alertas nuevas: {len(alertas_nuevas)}  Correos: {enviados}  "
-              f"Variantes vigiladas: {sum(vigiladas.values())}")
+        for k in ("ultimo_error", "ultimo_error_en"):
+            previo.pop(k, None)
+        datos = {**previo,
+                 "ultima_corrida": datetime.now(timezone.utc).isoformat(),
+                 "dia": hoy,
+                 "etiqueta": f"{ahora.day} {MESES[ahora.month-1]} {ahora.year}, {ahora:%H:%M} (hora de Mérida)",
+                 "modo": "rapida" if a.rapida else "completa",
+                 "corridas": int(previo.get("corridas", 0)) + 1,
+                 "alertas_nuevas": len(alertas_nuevas),
+                 "correos_enviados": enviados,
+                 "variantes_vigiladas": sum(vigiladas.values()),
+                 "total": db.total()}
+        if not a.rapida:
+            datos.update({"fuente": "PhishHunt (CC0), Phishing.Database (MIT) y búsqueda de variantes por DNS",
+                          "ultima_completa": datos["ultima_corrida"],
+                          "nuevos": len(nuevos),
+                          "dns_caidos": sum(1 for _, ok in dns_a if not ok)})
+        db.estado(datos)
+        print(f"Modo: {datos['modo']}  Sitios nuevos: {len(nuevos)}  Alertas nuevas: {len(alertas_nuevas)}  "
+              f"Correos: {enviados}  Variantes vigiladas: {sum(vigiladas.values())}")
         if mensajes and not enviados:
             print("Hay alertas para avisar pero no está configurado SMTP_HOST: quedan visibles en el panel.")
         return 0

@@ -151,6 +151,18 @@
     ]).then(function (res) { usar({ clientes: res[0], alertas: res[1], estado: res[2][0] ? res[2][0].datos : null }); });
   }
 
-  cargarDatos().then(function () { initSelector(); renderTodo(); })
+  /* cada 5 minutos vuelve a leer la base, sin perder el banco elegido; no lo hace si la pestaña está oculta
+     o si hay una evidencia abierta, para no cerrarla mientras se lee */
+  function refrescar() {
+    if (document.hidden || document.querySelector("#m-list details[open]")) return;
+    var elegido = S.cliente;
+    cargarDatos().then(function () {
+      initSelector();
+      if (S.clientes.some(function (c) { return c.id === elegido; })) { S.cliente = elegido; $("marca").value = elegido; }
+      renderTodo();
+    }).catch(function () {});
+  }
+
+  cargarDatos().then(function () { initSelector(); renderTodo(); setInterval(refrescar, 5 * 60 * 1000); })
     .catch(function () { $("m-estado").textContent = "No se pudieron cargar los datos"; });
 })();
