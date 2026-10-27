@@ -112,10 +112,36 @@
       if (S.filtro === "cerradas") return !ABIERTA[a.estado];
       return true;
     }).sort(function (x, y) { return ORDEN[x.prioridad] - ORDEN[y.prioridad] || y.puntaje - x.puntaje; });
+    S.visibles = rows;
+    var csv = $("m-csv"); if (csv) { csv.disabled = !rows.length; csv.textContent = "Descargar CSV (" + nf(rows.length) + (rows.length === 1 ? " alerta)" : " alertas)"); }
     var box = $("m-list"); box.textContent = ""; $("m-empty").hidden = rows.length > 0;
     $("m-empty").textContent = delCliente().length ? "No hay alertas con este filtro." : "Sin alertas por ahora. Seguimos vigilando tus dominios todos los días.";
     rows.forEach(function (a) { box.appendChild(tarjeta(a)); });
   }
+  /* ---------- descarga en CSV (lo que se ve con los filtros activos, con la evidencia completa) ---------- */
+  function celda(v) {
+    var t = v === null || v === undefined ? "" : String(v);
+    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;                 // que Excel no lo ejecute como fórmula (datos de registros públicos)
+    return /[",\n\r;]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  }
+  function descargarCSV() {
+    var c = clienteActual() || {}, hoy = new Date().toISOString().slice(0, 10);
+    var enc = ["prioridad", "dominio", "direccion_desactivada", "motivo", "como_lo_encontramos", "confirmacion", "estado", "puntaje",
+      "detectado_el", "registrado_el", "registrador", "correo_abuso", "plataforma", "dominio_oficial", "pais", "asn", "sigue_activo"];
+    var filas = (S.visibles || []).map(function (a) {
+      var e = a.evidencia || {};
+      return [a.prioridad, a.host, defang(a), String(a.motivo || "").replace(/\[\.\]/g, "."), CANAL[a.canal] || a.canal,
+        e.confirmacion === "revisar" ? "Por revisar" : "Lo señala un reporte externo", ESTADOS[a.estado] || a.estado, a.puntaje,
+        a.creada_en, e.registrado, e.registrador, e.correo_abuso, e.plataforma, e.oficial, a.pais, a.asn,
+        a.dns_ok === false ? "no" : a.dns_ok ? "sí" : "sin revisar"];
+    });
+    var texto = "﻿" + [enc].concat(filas).map(function (f) { return f.map(celda).join(","); }).join("\r\n");   // BOM: acentos bien en Excel
+    var url = URL.createObjectURL(new Blob([texto], { type: "text/csv;charset=utf-8" }));
+    var a = document.createElement("a"); a.href = url; a.download = "domiguard_" + (c.id || "alertas") + "_" + hoy + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
   function renderTodo() { renderEstado(); renderCliente(); renderKpis(); renderChips(); renderCanales(); renderLista(); }
 
   function initSelector() {
@@ -167,6 +193,7 @@
   }
 
   function iniciar() {
+    if ($("m-csv")) $("m-csv").onclick = descargarCSV;
     cargarDatos().then(function () { initSelector(); renderTodo(); setInterval(refrescar, 5 * 60 * 1000); })
       .catch(function () { $("m-estado").textContent = "No se pudieron cargar los datos"; });
   }

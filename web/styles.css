@@ -261,3 +261,7 @@ footer img{height:40px}
 .sesion-barra:empty{display:none}
 .salir{border:1px solid var(--glass-edge);background:var(--glass-cell);color:var(--ink);border-radius:999px;padding:6px 14px;font:600 13px var(--f-body);cursor:pointer;min-height:36px}
 .salir:hover{background:var(--accent-soft)}
+/* panel: descarga en CSV */
+.descarga{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0 0 14px}
+.descarga .more{margin:0}
+.descarga .more:disabled{opacity:.55;cursor:default}
