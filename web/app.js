@@ -136,21 +136,22 @@
       if (window.DOMIGUARD_DEMO) { usar(window.DOMIGUARD_DEMO); return Promise.resolve(); }
       return fetch("data/demo.json").then(function (r) { return r.json(); }).then(usar);
     }
-    var base = cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1", h = { apikey: cfg.SUPABASE_ANON_KEY };
-    /* llaves antiguas (JWT) van también en Authorization; las nuevas (sb_publishable_...) solo en apikey */
-    if (/^eyJ/.test(cfg.SUPABASE_ANON_KEY || "")) h.Authorization = "Bearer " + cfg.SUPABASE_ANON_KEY;
-    function pagina(ruta, desde, acc) {
-      return fetch(base + ruta, { headers: Object.assign({ Range: desde + "-" + (desde + 999) }, h) })
-        .then(function (r) { if (!r.ok) throw new Error(ruta + " " + r.status); return r.json(); })
-        .then(function (lote) { acc = acc.concat(lote); return lote.length === 1000 && acc.length < 10000 ? pagina(ruta, desde + 1000, acc) : acc; });
-    }
-    /* el panel muestra solo lo detectado en las últimas 48 horas; las alertas anteriores siguen guardadas en la base */
-    var desde = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
-    return Promise.all([
-      pagina("/clientes?select=id,nombre,marca,dominios,variantes_vigiladas,destacado&activo=eq.true", 0, []),
-      pagina("/alertas?select=*&detectada_en=gte." + encodeURIComponent(desde) + "&order=creada_en.desc", 0, []),
-      fetch(base + "/estado?id=eq.ultima&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; })
-    ]).then(function (res) { usar({ clientes: res[0], alertas: res[1], estado: res[2][0] ? res[2][0].datos : null }); });
+    var base = cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1";
+    /* con la llave de la cuenta: la base solo entrega las alertas del banco aprobado (ver sesion.js) */
+    return window.DomiguardSesion.encabezados().then(function (h) {
+      function pagina(ruta, desde, acc) {
+        return fetch(base + ruta, { headers: Object.assign({ Range: desde + "-" + (desde + 999) }, h) })
+          .then(function (r) { if (!r.ok) throw new Error(ruta + " " + r.status); return r.json(); })
+          .then(function (lote) { acc = acc.concat(lote); return lote.length === 1000 && acc.length < 10000 ? pagina(ruta, desde + 1000, acc) : acc; });
+      }
+      /* el panel muestra solo lo detectado en las últimas 48 horas; las alertas anteriores siguen guardadas en la base */
+      var desde = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+      return Promise.all([
+        pagina("/clientes?select=id,nombre,marca,dominios,variantes_vigiladas,destacado&activo=eq.true&id=eq." + encodeURIComponent(S.perfil.cliente_id), 0, []),
+        pagina("/alertas?select=*&cliente_id=eq." + encodeURIComponent(S.perfil.cliente_id) + "&detectada_en=gte." + encodeURIComponent(desde) + "&order=creada_en.desc", 0, []),
+        fetch(base + "/estado?id=eq.ultima&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; })
+      ]).then(function (res) { usar({ clientes: res[0], alertas: res[1], estado: res[2][0] ? res[2][0].datos : null }); });
+    });
   }
 
   /* cada 5 minutos vuelve a leer la base, sin perder el banco elegido; no lo hace si la pestaña está oculta
@@ -165,6 +166,11 @@
     }).catch(function () {});
   }
 
-  cargarDatos().then(function () { initSelector(); renderTodo(); setInterval(refrescar, 5 * 60 * 1000); })
-    .catch(function () { $("m-estado").textContent = "No se pudieron cargar los datos"; });
+  function iniciar() {
+    cargarDatos().then(function () { initSelector(); renderTodo(); setInterval(refrescar, 5 * 60 * 1000); })
+      .catch(function () { $("m-estado").textContent = "No se pudieron cargar los datos"; });
+  }
+  var cfg = window.DOMIGUARD_CONFIG || {};
+  if (!cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL)) { $("contenido").hidden = false; iniciar(); }  // demostración sin base: sin cuentas
+  else window.DomiguardSesion.proteger(function (perfil) { S.perfil = perfil; iniciar(); });
 })();

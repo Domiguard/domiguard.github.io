@@ -77,28 +77,52 @@ create index if not exists alertas_detectada_idx on alertas (detectada_en desc);
 create index if not exists sitios_visto_en_idx on sitios (visto_en desc);
 create index if not exists sitios_ultimo_dia_idx on sitios (ultimo_dia);
 
--- Seguridad: cualquiera puede LEER; solo la llave service_role (que vive en los
--- secretos de GitHub, nunca en la página) puede ESCRIBIR.
+-- Cuentas de clientes (Supabase Auth). Cada cuenta elige su banco al registrarse y no ve nada
+-- hasta que el equipo de Domiguard la aprueba: Table Editor > perfiles > aprobado = true.
+create table if not exists perfiles (
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  cliente_id  text not null references clientes(id),
+  aprobado    boolean not null default false,
+  correo      text,
+  creado_en   timestamptz not null default now()
+);
+-- Al registrarse, el perfil se crea solo con el banco que eligió (si el banco no existe, el registro falla)
+create or replace function public.crear_perfil() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.perfiles (user_id, cliente_id, correo)
+  values (new.id, new.raw_user_meta_data->>'cliente_id', new.email)
+  on conflict (user_id) do nothing;
+  return new;
+end $$;
+drop trigger if exists al_crear_usuario on auth.users;
+create trigger al_crear_usuario after insert on auth.users for each row execute function public.crear_perfil();
+
+-- Seguridad: solo la llave secreta (en los secretos de GitHub, nunca en la página) puede ESCRIBIR.
+-- Con la llave pública se leen los bancos (para elegir uno al registrarse) y el estado de la última corrida;
+-- las alertas solo las ve una cuenta aprobada, y solo las de su banco. sitios y clientes_contacto: nadie.
 alter table sitios enable row level security;
 alter table estado enable row level security;
 alter table clientes enable row level security;
-alter table clientes_contacto enable row level security;   -- sin política: nadie con la llave pública puede leerla
+alter table clientes_contacto enable row level security;
 alter table alertas enable row level security;
+alter table perfiles enable row level security;
 
 drop policy if exists "lectura publica sitios" on sitios;
-create policy "lectura publica sitios" on sitios for select using (true);
 
 drop policy if exists "lectura publica estado" on estado;
 create policy "lectura publica estado" on estado for select using (true);
 
--- Prototipo: el panel público lee clientes y alertas. En producción, cada cliente debe entrar con su
--- cuenta (Supabase Auth) y ver solo sus alertas: cambia estas dos políticas por
---   using (cliente_id = (auth.jwt() ->> 'cliente_id'))
 drop policy if exists "lectura publica clientes" on clientes;
 create policy "lectura publica clientes" on clientes for select using (true);
 
 drop policy if exists "lectura publica alertas" on alertas;
-create policy "lectura publica alertas" on alertas for select using (true);
+drop policy if exists "alertas de mi banco" on alertas;
+create policy "alertas de mi banco" on alertas for select to authenticated
+  using (exists (select 1 from perfiles p where p.user_id = auth.uid() and p.aprobado and p.cliente_id = alertas.cliente_id));
+
+drop policy if exists "ver mi perfil" on perfiles;
+create policy "ver mi perfil" on perfiles for select to authenticated using (user_id = auth.uid());
 
 -- Para dar de alta un cliente (cambia los datos):
 -- insert into clientes (id, nombre, marca, palabras, dominios)

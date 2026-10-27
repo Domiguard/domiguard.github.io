@@ -221,7 +221,9 @@
 
   function controles() {
     var sel = $("t-banco");
+    if (S.perfil) sel.textContent = "";            // con cuenta: solo su banco (sin "Todos los bancos")
     S.clientes.forEach(function (c) { var o = el("option", "", c.nombre); o.value = c.id; sel.appendChild(o); });
+    if (S.perfil) sel.value = S.banco;
     sel.onchange = function () { S.banco = sel.value; render(); };
     var box = $("t-periodo");
     function pintar() {
@@ -238,19 +240,22 @@
   function cargar() {
     var cfg = window.DOMIGUARD_CONFIG || {};
     if (!cfg.SUPABASE_URL) return fetch("data/demo.json").then(function (r) { return r.json(); }).then(function (d) { S.clientes = d.clientes || []; S.alertas = d.alertas || []; });
-    var base = cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1", h = { apikey: cfg.SUPABASE_ANON_KEY };
-    if (/^eyJ/.test(cfg.SUPABASE_ANON_KEY || "")) h.Authorization = "Bearer " + cfg.SUPABASE_ANON_KEY;
-    function pagina(ruta, desde, acc) {
-      return fetch(base + ruta, { headers: Object.assign({ Range: desde + "-" + (desde + 999) }, h) })
-        .then(function (r) { if (!r.ok) throw new Error(ruta + " " + r.status); return r.json(); })
-        .then(function (lote) { acc = acc.concat(lote); return lote.length === 1000 && acc.length < 50000 ? pagina(ruta, desde + 1000, acc) : acc; });
-    }
-    return Promise.all([
-      pagina("/clientes?select=id,nombre,destacado&activo=eq.true&order=nombre", 0, []),
-      pagina("/alertas?select=cliente_id,canal,prioridad,creada_en,host,evidencia->registrado,evidencia->registrador&order=creada_en", 0, []),
-      fetch(base + "/estado?id=eq.ultima&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; })
-    ]).then(function (res) {
-      S.clientes = res[0].sort(function (a, b) { return (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0); });
+    var base = cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1", cid = encodeURIComponent(S.perfil.cliente_id);
+    /* con la llave de la cuenta: la base solo entrega las alertas del banco aprobado (ver sesion.js) */
+    return window.DomiguardSesion.encabezados().then(function (h) {
+      function pagina(ruta, desde, acc) {
+        return fetch(base + ruta, { headers: Object.assign({ Range: desde + "-" + (desde + 999) }, h) })
+          .then(function (r) { if (!r.ok) throw new Error(ruta + " " + r.status); return r.json(); })
+          .then(function (lote) { acc = acc.concat(lote); return lote.length === 1000 && acc.length < 50000 ? pagina(ruta, desde + 1000, acc) : acc; });
+      }
+      return Promise.all([
+        pagina("/clientes?select=id,nombre,destacado&activo=eq.true&id=eq." + cid, 0, []),
+        pagina("/alertas?select=cliente_id,canal,prioridad,creada_en,host,evidencia->registrado,evidencia->registrador&cliente_id=eq." + cid + "&order=creada_en", 0, []),
+        fetch(base + "/estado?id=eq.ultima&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; })
+      ]);
+    }).then(function (res) {
+      S.clientes = res[0];
+      S.banco = S.perfil.cliente_id;
       S.alertas = res[1].map(function (a) { a.evidencia = { registrado: a.registrado, registrador: a.registrador }; return a; });
       var e = res[2][0] ? res[2][0].datos : null;
       $("t-estado").textContent = e && e.etiqueta ? "Última actualización: " + e.etiqueta : "";
@@ -258,10 +263,15 @@
   }
 
   var espera;
-  cargar().then(function () {
-    controles(); render();
-    var ultimo = innerWidth;      // al girar el celular o cambiar el tamaño de la ventana, se vuelve a dibujar
-    addEventListener("resize", function () { if (innerWidth === ultimo) return; ultimo = innerWidth; clearTimeout(espera); espera = setTimeout(render, 150); });
-  })
-    .catch(function () { $("t-estado").textContent = "No se pudieron cargar los datos"; });
+  function iniciar() {
+    cargar().then(function () {
+      controles(); render();
+      var ultimo = innerWidth;      // al girar el celular o cambiar el tamaño de la ventana, se vuelve a dibujar
+      addEventListener("resize", function () { if (innerWidth === ultimo) return; ultimo = innerWidth; clearTimeout(espera); espera = setTimeout(render, 150); });
+    })
+      .catch(function () { $("t-estado").textContent = "No se pudieron cargar los datos"; });
+  }
+  var cfg0 = window.DOMIGUARD_CONFIG || {};
+  if (!cfg0.SUPABASE_URL) { $("contenido").hidden = false; S.perfil = null; iniciar(); }   // demostración sin base: sin cuentas
+  else window.DomiguardSesion.proteger(function (perfil) { S.perfil = perfil; iniciar(); });
 })();

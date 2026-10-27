@@ -1,0 +1,151 @@
+/* Domiguard: cuentas de clientes (Supabase Auth). Cada cuenta elige su banco al registrarse y no ve nada
+   hasta que el equipo de Domiguard la aprueba (tabla perfiles, columna aprobado). La base solo entrega
+   las alertas del banco aprobado: lo garantizan las reglas de supabase/schema.sql, no esta página. */
+(function () {
+  "use strict";
+  var cfg = window.DOMIGUARD_CONFIG || {};
+  var BASE = (cfg.SUPABASE_URL || "").replace(/\/$/, "");
+  var CLAVE = "domiguard.sesion";
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+  /* la sesión se recuerda en este navegador; si el navegador no deja guardarla, dura mientras la pestaña esté abierta */
+  function leer() { try { return JSON.parse(localStorage.getItem(CLAVE)) || null; } catch (e) { return null; } }
+  var actual = leer();
+  function guardar(s) { actual = s; try { if (s) localStorage.setItem(CLAVE, JSON.stringify(s)); else localStorage.removeItem(CLAVE); } catch (e) {} }
+
+  var MENSAJES = [
+    [/invalid login credentials/i, "El correo o la contraseña no coinciden."],
+    [/already registered|already been registered|user already exists/i, "Ya existe una cuenta con ese correo. Inicia sesión."],
+    [/password should be at least|weak password|password is too short/i, "La contraseña debe tener al menos 6 caracteres."],
+    [/unable to validate email|invalid email|email address .* is invalid/i, "Revisa que el correo esté bien escrito."],
+    [/database error saving new user/i, "No se pudo registrar ese banco. Elige uno de la lista."],
+    [/rate limit|too many requests/i, "Demasiados intentos seguidos. Espera unos minutos y vuelve a probar."],
+    [/email not confirmed/i, "Falta confirmar el correo de esta cuenta."],
+    [/signups not allowed|signup is disabled/i, "Por ahora no se pueden crear cuentas nuevas."]
+  ];
+  function mensaje(d) {
+    var t = (d && (d.msg || d.message || d.error_description || d.error)) || "";
+    for (var i = 0; i < MENSAJES.length; i++) if (MENSAJES[i][0].test(t)) return MENSAJES[i][1];
+    return "No se pudo completar. Vuelve a intentarlo en un momento.";
+  }
+  function auth(ruta, cuerpo, token) {
+    var h = { apikey: cfg.SUPABASE_ANON_KEY, "Content-Type": "application/json" };
+    if (token) h.Authorization = "Bearer " + token;
+    return fetch(BASE + "/auth/v1" + ruta, { method: "POST", headers: h, body: JSON.stringify(cuerpo || {}) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(mensaje(d)); return d; }); });
+  }
+  function aSesion(d) {
+    if (!d || !d.access_token) return null;
+    return { access_token: d.access_token, refresh_token: d.refresh_token, correo: d.user && d.user.email,
+             expira: d.expires_at || Math.floor(Date.now() / 1000) + (d.expires_in || 3600) };
+  }
+  /* la llave de acceso dura una hora: se renueva sola un minuto antes */
+  function vigente() {
+    var s = actual;
+    if (!s) return Promise.resolve(null);
+    if (s.expira - 60 > Date.now() / 1000) return Promise.resolve(s);
+    return auth("/token?grant_type=refresh_token", { refresh_token: s.refresh_token })
+      .then(function (d) { var n = aSesion(d); if (n && !n.correo) n.correo = s.correo; guardar(n); return n; })
+      .catch(function () { guardar(null); return null; });
+  }
+  function encabezados() {
+    return vigente().then(function (s) {
+      var h = { apikey: cfg.SUPABASE_ANON_KEY };
+      if (s) h.Authorization = "Bearer " + s.access_token;
+      else if (/^eyJ/.test(cfg.SUPABASE_ANON_KEY || "")) h.Authorization = "Bearer " + cfg.SUPABASE_ANON_KEY;  // llaves antiguas
+      return h;
+    });
+  }
+  function rest(ruta) {
+    return encabezados().then(function (h) { return fetch(BASE + "/rest/v1" + ruta, { headers: h }); })
+      .then(function (r) { if (!r.ok) throw new Error(ruta + " " + r.status); return r.json(); });
+  }
+  function entrar(correo, clave) { return auth("/token?grant_type=password", { email: correo, password: clave }).then(function (d) { guardar(aSesion(d)); return actual; }); }
+  function registrar(correo, clave, cliente) {
+    return auth("/signup", { email: correo, password: clave, data: { cliente_id: cliente } })
+      .then(function (d) { var s = aSesion(d); if (s) guardar(s); return s; });   // sin sesión si Supabase pide confirmar el correo
+  }
+  function salir() { var s = actual; guardar(null); if (s) auth("/logout", {}, s.access_token).catch(function () {}); location.reload(); }
+  function perfil() { return rest("/perfiles?select=cliente_id,aprobado,correo").then(function (f) { return f[0] || null; }); }
+
+  /* ---------- pantalla de acceso ---------- */
+  function campo(id, texto, tipo, extra) {
+    var f = el("div", "field"), l = el("label", "", texto), i = el(tipo === "select" ? "select" : "input");
+    l.htmlFor = id; i.id = id; if (tipo !== "select") i.type = tipo;
+    for (var k in (extra || {})) i.setAttribute(k, extra[k]);
+    f.appendChild(l); f.appendChild(i); return f;
+  }
+  function formulario(caja, clientes, modo, alEntrar) {
+    caja.textContent = "";
+    var card = el("div", "card acceso");
+    var pest = el("div", "chips"); pest.setAttribute("role", "group"); pest.setAttribute("aria-label", "Elegir acción");
+    [["entrar", "Iniciar sesión"], ["crear", "Crear cuenta"]].forEach(function (p) {
+      var b = el("button", "chip", p[1]); b.type = "button"; b.setAttribute("aria-pressed", String(modo === p[0]));
+      b.onclick = function () { formulario(caja, clientes, p[0], alEntrar); }; pest.appendChild(b);
+    });
+    card.appendChild(pest);
+    var form = el("form", "form"); form.noValidate = false;
+    form.appendChild(campo("ac-correo", "Correo", "email", { required: "", autocomplete: "email" }));
+    form.appendChild(campo("ac-clave", "Contraseña", "password", { required: "", minlength: "6", autocomplete: modo === "crear" ? "new-password" : "current-password" }));
+    if (modo === "crear") {
+      var fb = campo("ac-banco", "Banco o fintech que quieres vigilar", "select", { required: "" }), sel = fb.querySelector("select");
+      var o0 = el("option", "", "Elige uno"); o0.value = ""; sel.appendChild(o0);
+      clientes.forEach(function (c) { var o = el("option", "", c.nombre); o.value = c.id; sel.appendChild(o); });
+      form.appendChild(fb);
+    }
+    var btn = el("button", "btn p", modo === "crear" ? "Crear cuenta" : "Entrar"); btn.type = "submit";
+    var pie = el("div", "acceso-pie"); pie.appendChild(btn); form.appendChild(pie);
+    var aviso = el("p", "msg no"); aviso.hidden = true; aviso.setAttribute("role", "alert");
+    form.appendChild(aviso);
+    if (modo === "crear") form.appendChild(el("p", "note", "Al crear la cuenta, el equipo de Domiguard revisa que trabajes en ese banco antes de mostrarte sus alertas."));
+    form.onsubmit = function (e) {
+      e.preventDefault(); aviso.hidden = true; btn.disabled = true;
+      var correo = form.querySelector("#ac-correo").value.trim(), clave = form.querySelector("#ac-clave").value;
+      var p = modo === "crear" ? registrar(correo, clave, form.querySelector("#ac-banco").value) : entrar(correo, clave);
+      p.then(function (s) {
+        if (s) { alEntrar(); return; }
+        aviso.className = "msg ok"; aviso.textContent = "Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión."; aviso.hidden = false; btn.disabled = false;
+      }).catch(function (err) { aviso.className = "msg no"; aviso.textContent = err.message; aviso.hidden = false; btn.disabled = false; });
+    };
+    card.appendChild(form); caja.appendChild(card);
+    var primero = card.querySelector("input"); if (primero) primero.focus();
+  }
+  function barra(correo, nombreBanco) {
+    var b = document.getElementById("sesion-barra"); if (!b) return;
+    b.textContent = "";
+    b.appendChild(el("span", "", (nombreBanco ? nombreBanco + " · " : "") + (correo || "")));
+    var s = el("button", "salir", "Cerrar sesión"); s.type = "button"; s.onclick = salir; b.appendChild(s);
+  }
+  /* Muestra el formulario, el aviso de "pendiente" o el contenido; llama listo(perfil) cuando la cuenta está aprobada. */
+  function proteger(listo) {
+    var caja = document.getElementById("acceso"), contenido = document.getElementById("contenido");
+    var estado = document.getElementById("m-estado") || document.getElementById("t-estado");
+    function sinSesion() {
+      contenido.hidden = true; caja.hidden = false; if (estado) estado.textContent = "";
+      rest("/clientes?select=id,nombre,destacado&activo=eq.true&order=nombre").then(function (cl) {
+        cl.sort(function (a, b) { return (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0); });
+        formulario(caja, cl, "entrar", revisar);
+      }).catch(function () { caja.textContent = ""; caja.appendChild(el("p", "msg no", "No se pudo conectar. Vuelve a intentarlo en un momento.")); });
+    }
+    function revisar() {
+      vigente().then(function (s) {
+        if (!s) { sinSesion(); return; }
+        return Promise.all([perfil(), rest("/clientes?select=id,nombre")]).then(function (res) {
+          var p = res[0], nombres = {}; res[1].forEach(function (c) { nombres[c.id] = c.nombre; });
+          barra(s.correo, p && nombres[p.cliente_id]);
+          if (p && p.aprobado) { caja.hidden = true; contenido.hidden = false; listo(p); return; }
+          contenido.hidden = true; caja.hidden = false; caja.textContent = ""; if (estado) estado.textContent = "";
+          var card = el("div", "card acceso");
+          card.appendChild(el("h3", "", "Tu cuenta está en revisión"));
+          card.appendChild(el("p", "", p ? "La registraste para " + (nombres[p.cliente_id] || p.cliente_id) + ". En cuanto el equipo de Domiguard la apruebe, aquí verás sus alertas."
+                                         : "No encontramos el banco de tu cuenta. Escríbele al equipo de Domiguard."));
+          var otra = el("button", "btn s", "Volver a revisar"); otra.type = "button"; otra.onclick = revisar; card.appendChild(otra);
+          caja.appendChild(card);
+        });
+      }).catch(function () { caja.hidden = false; caja.textContent = ""; caja.appendChild(el("p", "msg no", "No se pudo conectar. Vuelve a intentarlo en un momento.")); });
+    }
+    revisar();
+  }
+
+  window.DomiguardSesion = { encabezados: encabezados, proteger: proteger, salir: salir };
+})();

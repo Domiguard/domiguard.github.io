@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="img/icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=cuentas-1">
 </head>
 <body>
 <a class="skip" href="#panel">Saltar al contenido</a>
@@ -27,8 +27,11 @@
 <section class="blk" id="panel"><div class="wrap">
   <div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-end">
     <div><h2>Panel del cliente</h2><p class="lead" style="margin-top:8px">Los sitios que suplantan a tu banco, ordenados por prioridad, con la evidencia para actuar.</p></div>
-    <div class="tiny" style="text-align:right"><span id="m-estado">Cargando…</span></div>
+    <div class="tiny" style="text-align:right"><span id="m-estado">Cargando…</span><div id="sesion-barra" class="sesion-barra"></div></div>
   </div>
+
+  <div id="acceso" hidden></div>
+  <div id="contenido" class="pila" hidden>
 
   <div class="card" style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end">
     <div class="field" style="flex:1 1 240px"><label for="marca">Banco o fintech vigilado</label><select id="marca"></select></div>
@@ -49,6 +52,7 @@
     <div class="empty" id="m-empty" hidden>No hay alertas con este filtro.</div>
     <p class="note">Las direcciones se muestran con puntos entre corchetes y sin enlace, para que nadie entre por accidente. El puntaje es la probabilidad de phishing que calcula el modelo de Domiguard, de 0 a 100.</p>
   </div>
+  </div>
 </div></section>
 
 </main>
@@ -59,6 +63,7 @@
 </div></footer>
 
 <script src="config.js"></script>
-<script src="app.js"></script>
+<script src="sesion.js?v=cuentas-1"></script>
+<script src="app.js?v=cuentas-1"></script>
 </body>
 </html>

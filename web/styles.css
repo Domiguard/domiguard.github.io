@@ -245,3 +245,19 @@ footer img{height:40px}
 .viz-tabla th,.viz-tabla td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
 .viz-tabla td.num,.viz-tabla th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
 @media (forced-colors:active){.viz-svg path{stroke:CanvasText;stroke-width:1}}
+
+/* cuentas: acceso al panel y a tendencias */
+.pila{display:flex;flex-direction:column;gap:26px}.pila[hidden]{display:none}
+.acceso{max-width:520px;display:flex;flex-direction:column;gap:14px}
+.acceso .form{flex-direction:column}
+.acceso .field{flex:none}
+.acceso input[type=email],.acceso input[type=password]{font:inherit;color:var(--ink);background:var(--glass-input);padding:12px 14px;border:1px solid var(--line);border-radius:14px;width:100%;min-height:48px;box-shadow:inset 0 1px 2px rgba(31,56,100,.1)}
+.acceso .btn.p{background:linear-gradient(180deg,#2E5395,#1F3864);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 12px 24px -14px rgba(31,56,100,.9)}
+.acceso .btn.s{border:1px solid var(--line);color:var(--ink);background:var(--glass-cell);backdrop-filter:none;align-self:flex-start}
+.acceso .btn:disabled{opacity:.6;cursor:wait}
+.acceso .msg{margin:0;padding:12px 14px;border-radius:14px}
+.acceso p{margin:0}
+.sesion-barra{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:flex-end;align-items:center;margin-top:4px}
+.sesion-barra:empty{display:none}
+.salir{border:1px solid var(--glass-edge);background:var(--glass-cell);color:var(--ink);border-radius:999px;padding:6px 14px;font:600 13px var(--f-body);cursor:pointer;min-height:36px}
+.salir:hover{background:var(--accent-soft)}
