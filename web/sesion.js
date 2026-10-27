@@ -1,6 +1,7 @@
-/* Domiguard: cuentas de clientes (Supabase Auth). Cada cuenta elige su banco al registrarse y no ve nada
-   hasta que el equipo de Domiguard la aprueba (tabla perfiles, columna aprobado). La base solo entrega
-   las alertas del banco aprobado: lo garantizan las reglas de supabase/schema.sql, no esta página. */
+/* Domiguard: cuentas de clientes (Supabase Auth). El panel se activa cuando el equipo de Domiguard acepta
+   la contratación de un plan (tabla solicitudes) hecha con el MISMO correo de la cuenta: ahí la base le asigna
+   su banco (perfiles.cliente_id) y la aprueba. La base solo entrega las alertas de ese banco: lo garantizan
+   las reglas de supabase/schema.sql, no esta página. */
 (function () {
   "use strict";
   var cfg = window.DOMIGUARD_CONFIG || {};
@@ -18,7 +19,7 @@
     [/already registered|already been registered|user already exists/i, "Ya existe una cuenta con ese correo. Inicia sesión."],
     [/password should be at least|weak password|password is too short/i, "La contraseña debe tener al menos 6 caracteres."],
     [/unable to validate email|invalid email|email address .* is invalid/i, "Revisa que el correo esté bien escrito."],
-    [/database error saving new user/i, "No se pudo registrar ese banco. Elige uno de la lista."],
+    [/database error saving new user/i, "No se pudo crear la cuenta. Vuelve a intentarlo en un momento."],
     [/rate limit|too many requests/i, "Demasiados intentos seguidos. Espera unos minutos y vuelve a probar."],
     [/email not confirmed/i, "Falta confirmar el correo de esta cuenta."],
     [/signups not allowed|signup is disabled/i, "Por ahora no se pueden crear cuentas nuevas."]
@@ -61,8 +62,8 @@
       .then(function (r) { if (!r.ok) throw new Error(ruta + " " + r.status); return r.json(); });
   }
   function entrar(correo, clave) { return auth("/token?grant_type=password", { email: correo, password: clave }).then(function (d) { guardar(aSesion(d)); return actual; }); }
-  function registrar(correo, clave, cliente) {
-    return auth("/signup", { email: correo, password: clave, data: { cliente_id: cliente } })
+  function registrar(correo, clave) {
+    return auth("/signup", { email: correo, password: clave })
       .then(function (d) { var s = aSesion(d); if (s) guardar(s); return s; });   // sin sesión si Supabase pide confirmar el correo
   }
   function salir() { var s = actual; guardar(null); if (s) auth("/logout", {}, s.access_token).catch(function () {}); location.reload(); }
@@ -87,21 +88,15 @@
     var form = el("form", "form"); form.noValidate = false;
     form.appendChild(campo("ac-correo", "Correo", "email", { required: "", autocomplete: "email" }));
     form.appendChild(campo("ac-clave", "Contraseña", "password", { required: "", minlength: "6", autocomplete: modo === "crear" ? "new-password" : "current-password" }));
-    if (modo === "crear") {
-      var fb = campo("ac-banco", "Banco o fintech que quieres vigilar", "select", { required: "" }), sel = fb.querySelector("select");
-      var o0 = el("option", "", "Elige uno"); o0.value = ""; sel.appendChild(o0);
-      clientes.forEach(function (c) { var o = el("option", "", c.nombre); o.value = c.id; sel.appendChild(o); });
-      form.appendChild(fb);
-    }
     var btn = el("button", "btn p", modo === "crear" ? "Crear cuenta" : "Entrar"); btn.type = "submit";
     var pie = el("div", "acceso-pie"); pie.appendChild(btn); form.appendChild(pie);
     var aviso = el("p", "msg no"); aviso.hidden = true; aviso.setAttribute("role", "alert");
     form.appendChild(aviso);
-    if (modo === "crear") form.appendChild(el("p", "note", "Al crear la cuenta, el equipo de Domiguard revisa que trabajes en ese banco antes de mostrarte sus alertas."));
+    if (modo === "crear") form.appendChild(el("p", "note", "Usa el mismo correo con el que contrataste tu plan. Tu panel se activa con tu banco cuando el equipo de Domiguard acepte la contratación."));
     form.onsubmit = function (e) {
       e.preventDefault(); aviso.hidden = true; btn.disabled = true;
       var correo = form.querySelector("#ac-correo").value.trim(), clave = form.querySelector("#ac-clave").value;
-      var p = modo === "crear" ? registrar(correo, clave, form.querySelector("#ac-banco").value) : entrar(correo, clave);
+      var p = modo === "crear" ? registrar(correo, clave) : entrar(correo, clave);
       p.then(function (s) {
         if (s) { alEntrar(); return; }
         aviso.className = "msg ok"; aviso.textContent = "Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión."; aviso.hidden = false; btn.disabled = false;
@@ -122,10 +117,7 @@
     var estado = document.getElementById("m-estado") || document.getElementById("t-estado");
     function sinSesion() {
       contenido.hidden = true; caja.hidden = false; if (estado) estado.textContent = "";
-      rest("/clientes?select=id,nombre,destacado&activo=eq.true&order=nombre").then(function (cl) {
-        cl.sort(function (a, b) { return (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0); });
-        formulario(caja, cl, "entrar", revisar);
-      }).catch(function () { caja.textContent = ""; caja.appendChild(el("p", "msg no", "No se pudo conectar. Vuelve a intentarlo en un momento.")); });
+      formulario(caja, [], "entrar", revisar);
     }
     function revisar() {
       vigente().then(function (s) {
@@ -136,9 +128,14 @@
           if (p && p.aprobado) { caja.hidden = true; contenido.hidden = false; listo(p); return; }
           contenido.hidden = true; caja.hidden = false; caja.textContent = ""; if (estado) estado.textContent = "";
           var card = el("div", "card acceso");
-          card.appendChild(el("h3", "", "Tu cuenta está en revisión"));
-          card.appendChild(el("p", "", p ? "La registraste para " + (nombres[p.cliente_id] || p.cliente_id) + ". En cuanto el equipo de Domiguard la apruebe, aquí verás sus alertas."
-                                         : "No encontramos el banco de tu cuenta. Escríbele al equipo de Domiguard."));
+          if (p && p.cliente_id) {          // tenía plan, pero el equipo lo suspendió o lo está revisando
+            card.appendChild(el("h3", "", "Tu plan está en revisión"));
+            card.appendChild(el("p", "", "Tu cuenta corresponde a " + (nombres[p.cliente_id] || p.cliente_id) + ". En cuanto el equipo de Domiguard reactive tu plan, aquí verás sus alertas."));
+          } else {
+            card.appendChild(el("h3", "", "Tu cuenta está lista; falta activar tu plan"));
+            card.appendChild(el("p", "", "Todavía no hay un plan aceptado con el correo " + s.correo + ". Contrata un plan con este mismo correo; en cuanto el equipo de Domiguard lo acepte, tu panel se activa con tu banco."));
+            var ir = el("a", "btn p", "Ver planes"); ir.href = "planes.html"; card.appendChild(ir);
+          }
           var otra = el("button", "btn s", "Volver a revisar"); otra.type = "button"; otra.onclick = revisar; card.appendChild(otra);
           caja.appendChild(card);
         });

@@ -292,3 +292,4 @@ footer img{height:40px}
 .ej-al{flex:1.4 1 420px;min-width:0;color:#1F3864;background:rgba(255,255,255,.94);--glass-cell:rgba(255,255,255,.94);--ink:#1F3864;--ink2:#33476B;--mute:#46597D;--accent-soft:rgba(143,180,232,.28);--glass-edge:rgba(255,255,255,.72)}
 .ej-al .mono{color:#1F3864}
 .ej-al .p-mid{background:rgba(255,242,204,.95);color:#6B4500}
+.acceso .btn{align-self:flex-start;text-align:center}

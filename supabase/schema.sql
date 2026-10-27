@@ -77,21 +77,62 @@ create index if not exists alertas_detectada_idx on alertas (detectada_en desc);
 create index if not exists sitios_visto_en_idx on sitios (visto_en desc);
 create index if not exists sitios_ultimo_dia_idx on sitios (ultimo_dia);
 
--- Cuentas de clientes (Supabase Auth). Cada cuenta elige su banco al registrarse y no ve nada
--- hasta que el equipo de Domiguard la aprueba: Table Editor > perfiles > aprobado = true.
+-- Solicitudes de contratación desde planes.html (pago de DEMOSTRACIÓN: no se cobra nada).
+-- La página solo puede agregar; nadie puede leerlas con la llave pública. El equipo las ve en Table Editor.
+create table if not exists solicitudes (
+  id         bigint generated always as identity primary key,
+  plan       text not null check (plan in ('basico','profesional','empresarial')),
+  empresa    text check (char_length(empresa) <= 120),
+  dominios   text[] not null check (cardinality(dominios) between 1 and 100),
+  correo     text not null check (char_length(correo) <= 254 and correo ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
+  cliente_id text,                                    -- el banco que asigna el equipo al aceptar
+  estado     text not null default 'nueva' check (estado in ('nueva','en_revision','activa','descartada')),
+  creada_en  timestamptz not null default now()
+);
+alter table solicitudes enable row level security;
+drop policy if exists "enviar solicitud" on solicitudes;
+create policy "enviar solicitud" on solicitudes for insert to anon, authenticated with check (estado = 'nueva' and cliente_id is null);
+
+-- Aceptar una contratación: en Table Editor > solicitudes, escribe el banco en cliente_id (uno existente como
+-- 'bbva' o uno nuevo) y cambia estado a 'activa'. La base crea o completa el banco con sus dominios, guarda
+-- el correo de alertas y activa la cuenta con ese correo. Si después se cambia a otro estado, se desactiva.
+create or replace function public.activar_solicitud() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.estado = 'activa' and coalesce(trim(new.cliente_id), '') <> '' then
+    new.cliente_id := lower(trim(new.cliente_id));
+    insert into clientes (id, nombre, marca, palabras, dominios)
+    values (new.cliente_id, coalesce(nullif(trim(new.empresa), ''), new.cliente_id), new.cliente_id, array[new.cliente_id], new.dominios)
+    on conflict (id) do update set dominios = array(select distinct d from unnest(clientes.dominios || excluded.dominios) d);
+    insert into clientes_contacto (cliente_id, correo) values (new.cliente_id, lower(new.correo)) on conflict do nothing;
+    update perfiles set cliente_id = new.cliente_id, aprobado = true where lower(correo) = lower(new.correo);
+  elsif tg_op = 'UPDATE' and old.estado = 'activa' and new.estado <> 'activa' then
+    update perfiles set aprobado = false where lower(correo) = lower(new.correo) and cliente_id = old.cliente_id;
+  end if;
+  return new;
+end $$;
+drop trigger if exists al_activar_solicitud on solicitudes;
+create trigger al_activar_solicitud before update on solicitudes for each row execute function public.activar_solicitud();
+
+-- Cuentas de clientes (Supabase Auth). El panel se activa cuando el equipo de Domiguard acepta la
+-- contratación (tabla solicitudes, más abajo) hecha con el mismo correo de la cuenta.
 create table if not exists perfiles (
   user_id     uuid primary key references auth.users(id) on delete cascade,
-  cliente_id  text not null references clientes(id),
+  cliente_id  text references clientes(id),           -- vacío hasta que se acepte su contratación
   aprobado    boolean not null default false,
   correo      text,
   creado_en   timestamptz not null default now()
 );
--- Al registrarse, el perfil se crea solo con el banco que eligió (si el banco no existe, el registro falla)
+-- Al registrarse: si ya hay una contratación aceptada con ese correo, la cuenta entra activada con su banco
 create or replace function public.crear_perfil() returns trigger
 language plpgsql security definer set search_path = public as $$
+declare banco text;
 begin
-  insert into public.perfiles (user_id, cliente_id, correo)
-  values (new.id, new.raw_user_meta_data->>'cliente_id', new.email)
+  select cliente_id into banco from public.solicitudes
+   where lower(correo) = lower(new.email) and estado = 'activa' and cliente_id is not null
+   order by creada_en desc limit 1;
+  insert into public.perfiles (user_id, cliente_id, aprobado, correo)
+  values (new.id, banco, banco is not null, new.email)
   on conflict (user_id) do nothing;
   return new;
 end $$;
@@ -129,17 +170,3 @@ create policy "ver mi perfil" on perfiles for select to authenticated using (use
 --   values ('bbva', 'BBVA México', 'bbva', '{bbva}', '{bbva.mx,bbva.com}');
 -- insert into clientes_contacto (cliente_id, correo) values ('bbva', 'CORREO-DE-SEGURIDAD-DEL-CLIENTE');
 
--- Solicitudes de contratación desde planes.html (pago de DEMOSTRACIÓN: no se cobra nada).
--- La página solo puede agregar; nadie puede leerlas con la llave pública. El equipo las ve en Table Editor.
-create table if not exists solicitudes (
-  id         bigint generated always as identity primary key,
-  plan       text not null check (plan in ('basico','profesional','empresarial')),
-  empresa    text check (char_length(empresa) <= 120),
-  dominios   text[] not null check (cardinality(dominios) between 1 and 100),
-  correo     text not null check (char_length(correo) <= 254 and correo ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
-  estado     text not null default 'nueva' check (estado in ('nueva','en_revision','activa','descartada')),
-  creada_en  timestamptz not null default now()
-);
-alter table solicitudes enable row level security;
-drop policy if exists "enviar solicitud" on solicitudes;
-create policy "enviar solicitud" on solicitudes for insert to anon, authenticated with check (estado = 'nueva');
