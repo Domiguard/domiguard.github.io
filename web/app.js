@@ -113,7 +113,9 @@
       return true;
     }).sort(function (x, y) { return ORDEN[x.prioridad] - ORDEN[y.prioridad] || y.puntaje - x.puntaje; });
     S.visibles = rows;
-    var csv = $("m-csv"); if (csv) { csv.disabled = !rows.length; csv.textContent = "Descargar CSV (" + nf(rows.length) + (rows.length === 1 ? " alerta)" : " alertas)"); }
+    var xl = $("m-excel"), csv = $("m-csv");
+    if (xl) { xl.disabled = !rows.length; xl.textContent = "Descargar Excel (" + nf(rows.length) + (rows.length === 1 ? " alerta)" : " alertas)"); }
+    if (csv) csv.disabled = !rows.length;
     var box = $("m-list"); box.textContent = ""; $("m-empty").hidden = rows.length > 0;
     $("m-empty").textContent = delCliente().length ? "No hay alertas con este filtro." : "Sin alertas por ahora. Seguimos vigilando tus dominios todos los días.";
     rows.forEach(function (a) { box.appendChild(tarjeta(a)); });
@@ -124,22 +126,39 @@
     if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;                 // que Excel no lo ejecute como fórmula (datos de registros públicos)
     return /[",\n\r;]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
   }
+  /* las mismas columnas para Excel y CSV: encabezados, ancho en Excel y valor de cada alerta */
+  var COLUMNAS = [
+    ["Prioridad", 11, function (a) { return { alta: "Alta", media: "Media", baja: "Baja" }[a.prioridad] || a.prioridad; }],
+    ["Dominio", 34, function (a) { return a.host; }],
+    ["Dirección desactivada", 40, function (a) { return defang(a); }],
+    ["Motivo", 52, function (a) { return String(a.motivo || "").replace(/\[\.\]/g, "."); }],
+    ["Cómo lo encontramos", 26, function (a) { return CANAL[a.canal] || a.canal; }],
+    ["Confirmación", 28, function (a, e) { return e.confirmacion === "revisar" ? "Por revisar" : "Lo señala un reporte externo"; }],
+    ["Estado", 20, function (a) { return ESTADOS[a.estado] || a.estado; }],
+    ["Puntaje (0 a 100)", 16, function (a) { return a.puntaje; }],
+    ["Detectado el", 14, function (a) { return a.creada_en; }],
+    ["Registrado el", 14, function (a, e) { return e.registrado; }],
+    ["Registrador", 30, function (a, e) { return e.registrador; }],
+    ["Correo de abuso", 30, function (a, e) { return e.correo_abuso; }],
+    ["Plataforma", 18, function (a, e) { return e.plataforma; }],
+    ["Dominio oficial", 20, function (a, e) { return e.oficial; }],
+    ["País", 16, function (a) { return a.pais; }],
+    ["ASN", 10, function (a) { return a.asn; }],
+    ["¿Sigue activo?", 14, function (a) { return a.dns_ok === false ? "No" : a.dns_ok ? "Sí" : "Sin revisar"; }]
+  ];
+  function filasDescarga() {
+    return (S.visibles || []).map(function (a) { var e = a.evidencia || {}; return COLUMNAS.map(function (c) { return c[2](a, e); }); });
+  }
+  function nombreArchivo(ext) { return "domiguard_" + ((clienteActual() || {}).id || "alertas") + "_" + new Date().toISOString().slice(0, 10) + "." + ext; }
+  function descargarExcel() {
+    var c = clienteActual() || {};
+    var libro = window.DomiguardExcel.crear("Alertas " + (c.nombre || ""), COLUMNAS.map(function (x) { return x[0]; }), filasDescarga(), COLUMNAS.map(function (x) { return x[1]; }));
+    window.DomiguardExcel.descargar(nombreArchivo("xlsx"), libro);
+  }
   function descargarCSV() {
-    var c = clienteActual() || {}, hoy = new Date().toISOString().slice(0, 10);
-    var enc = ["prioridad", "dominio", "direccion_desactivada", "motivo", "como_lo_encontramos", "confirmacion", "estado", "puntaje",
-      "detectado_el", "registrado_el", "registrador", "correo_abuso", "plataforma", "dominio_oficial", "pais", "asn", "sigue_activo"];
-    var filas = (S.visibles || []).map(function (a) {
-      var e = a.evidencia || {};
-      return [a.prioridad, a.host, defang(a), String(a.motivo || "").replace(/\[\.\]/g, "."), CANAL[a.canal] || a.canal,
-        e.confirmacion === "revisar" ? "Por revisar" : "Lo señala un reporte externo", ESTADOS[a.estado] || a.estado, a.puntaje,
-        a.creada_en, e.registrado, e.registrador, e.correo_abuso, e.plataforma, e.oficial, a.pais, a.asn,
-        a.dns_ok === false ? "no" : a.dns_ok ? "sí" : "sin revisar"];
-    });
-    var texto = "﻿" + [enc].concat(filas).map(function (f) { return f.map(celda).join(","); }).join("\r\n");   // BOM: acentos bien en Excel
-    var url = URL.createObjectURL(new Blob([texto], { type: "text/csv;charset=utf-8" }));
-    var a = document.createElement("a"); a.href = url; a.download = "domiguard_" + (c.id || "alertas") + "_" + hoy + ".csv";
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    var texto = "﻿" + [COLUMNAS.map(function (x) { return x[0]; })].concat(filasDescarga())
+      .map(function (f) { return f.map(celda).join(","); }).join("\r\n");          // BOM: acentos bien en Excel
+    window.DomiguardExcel.descargar(nombreArchivo("csv"), new Blob([texto], { type: "text/csv;charset=utf-8" }));
   }
 
   function renderTodo() { renderEstado(); renderCliente(); renderKpis(); renderChips(); renderCanales(); renderLista(); }
@@ -193,6 +212,7 @@
   }
 
   function iniciar() {
+    if ($("m-excel")) $("m-excel").onclick = descargarExcel;
     if ($("m-csv")) $("m-csv").onclick = descargarCSV;
     cargarDatos().then(function () { initSelector(); renderTodo(); setInterval(refrescar, 5 * 60 * 1000); })
       .catch(function () { $("m-estado").textContent = "No se pudieron cargar los datos"; });

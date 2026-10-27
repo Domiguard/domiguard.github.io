@@ -265,3 +265,4 @@ footer img{height:40px}
 .descarga{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0 0 14px}
 .descarga .more{margin:0}
 .descarga .more:disabled{opacity:.55;cursor:default}
+.descarga .more.principal{background:linear-gradient(180deg,#2E5395,#1F3864);color:#fff;border-color:rgba(255,255,255,.3);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 8px 18px -10px rgba(31,56,100,.9)}
