@@ -506,12 +506,26 @@ def main():
         print(f"Alertas por reportes: {len(al)} (en seco: no se consulta DNS ni RDAP ni se envía correo)")
         return 0
 
-    # strip(): al pegar un secreto en GitHub es fácil que se cuele un espacio o salto de línea al final
+    # Al pegar un secreto en GitHub es fácil que se cuelen espacios u otra línea: se toma solo la clave.
     url = (os.environ.get("SUPABASE_URL") or "").strip()
-    llave = (os.environ.get("SUPABASE_SERVICE_KEY") or "").strip()
-    if not url or not llave:
+    crudo = os.environ.get("SUPABASE_SERVICE_KEY") or ""
+    m = re.search(r"sb_secret_[A-Za-z0-9_\-]+|eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+", crudo)
+    llave = m.group(0) if m else ""
+    if not url or not crudo.strip():
         print("Faltan SUPABASE_URL y SUPABASE_SERVICE_KEY", file=sys.stderr)
         return 2
+    if not llave:
+        # No se imprime ni un pedazo de la clave: solo de qué tipo parece, para saber qué se pegó.
+        t = crudo.strip()
+        tipo = ("la clave pública (sb_publishable_), no la secreta" if t.startswith("sb_publishable_") else
+                "una dirección web, no una clave" if t.startswith("http") else
+                "un token de GitHub, no la clave de Supabase" if t.startswith(("ghp_", "github_pat_")) else
+                "un texto que no es clave de Supabase")
+        print(f"SUPABASE_SERVICE_KEY no parece una clave secreta de Supabase (debe empezar con sb_secret_ o eyJ): "
+              f"parece {tipo}. Tiene {len(crudo.splitlines())} línea(s).", file=sys.stderr)
+        return 2
+    if llave != crudo.strip():
+        print(f"Aviso: SUPABASE_SERVICE_KEY traía texto de más ({len(crudo.splitlines())} línea(s)); se usó solo la clave.")
     db = Base(url, llave)
     try:
         # 1. fuente de reportes -> base de sitios
