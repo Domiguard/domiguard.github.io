@@ -62,9 +62,13 @@ create table if not exists alertas (
   dns_ok        boolean,
   dns_revisado  timestamptz,
   enviada_en    timestamptz,
-  evidencia     jsonb not null default '{}'
+  evidencia     jsonb not null default '{}',
+  detectada_en  timestamptz not null default now()   -- hora exacta de detección: el panel muestra solo las últimas 48 horas
 );
+-- Para bases creadas antes de esta columna (no hace nada si ya existe):
+alter table alertas add column if not exists detectada_en timestamptz not null default now();
 create index if not exists alertas_cliente_idx on alertas (cliente_id, creada_en desc);
+create index if not exists alertas_detectada_idx on alertas (detectada_en desc);
 
 create index if not exists sitios_visto_en_idx on sitios (visto_en desc);
 create index if not exists sitios_ultimo_dia_idx on sitios (ultimo_dia);

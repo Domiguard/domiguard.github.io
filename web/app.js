@@ -144,9 +144,11 @@
         .then(function (r) { if (!r.ok) throw new Error(ruta + " " + r.status); return r.json(); })
         .then(function (lote) { acc = acc.concat(lote); return lote.length === 1000 && acc.length < 10000 ? pagina(ruta, desde + 1000, acc) : acc; });
     }
+    /* el panel muestra solo lo detectado en las últimas 48 horas; las alertas anteriores siguen guardadas en la base */
+    var desde = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
     return Promise.all([
       pagina("/clientes?select=id,nombre,marca,dominios,variantes_vigiladas,destacado&activo=eq.true", 0, []),
-      pagina("/alertas?select=*&order=creada_en.desc", 0, []),
+      pagina("/alertas?select=*&detectada_en=gte." + encodeURIComponent(desde) + "&order=creada_en.desc", 0, []),
       fetch(base + "/estado?id=eq.ultima&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; })
     ]).then(function (res) { usar({ clientes: res[0], alertas: res[1], estado: res[2][0] ? res[2][0].datos : null }); });
   }
