@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="img/icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=planes-1">
+<link rel="stylesheet" href="styles.css?v=menu-1">
 </head>
 <body>
 <a class="skip" href="#servicio">Saltar al contenido</a>
@@ -18,8 +18,9 @@
   <ul>
     <li><a class="l" href="index.html" aria-current="page">Inicio</a></li>
     <li><a class="l" href="planes.html">Planes</a></li>
-    <li><a class="l" href="tendencias.html">Tendencias</a></li>
-    <li><a class="btn-nav" href="panel.html">Panel del cliente</a></li>
+    <li data-menu="cliente" hidden><a class="l" href="tendencias.html">Tendencias</a></li>
+    <li data-menu="cliente" hidden><a class="btn-nav" href="panel.html">Panel del cliente</a></li>
+    <li data-menu="visitante"><a class="btn-nav" href="panel.html">Entrar</a></li>
   </ul>
 </div></nav>
 
@@ -28,7 +29,7 @@
     <div class="eyebrow">Para bancos, fintechs y plataformas de pago</div>
     <h1>Encontramos los sitios que se hacen pasar por tu banco</h1>
     <p>Domiguard vigila internet por ti, detecta los sitios falsos que imitan a tu banco o fintech y te los entrega con evidencia, listos para que los des de baja.</p>
-    <div class="btns"><a class="btn p" href="panel.html">Ver el panel del cliente</a><a class="btn s" href="planes.html">Ver planes</a></div>
+    <div class="btns"><a class="btn p" href="panel.html" data-menu="cliente" hidden>Ver el panel del cliente</a><a class="btn s" href="planes.html">Ver planes</a></div>
   </div>
   <div class="seal" aria-label="Alerta detectada">
     <div class="tiny">Así llega una alerta a tu equipo de seguridad (detección real)</div>
@@ -99,5 +100,7 @@
   <div style="max-width:560px">Proyecto académico de Inteligencia de Negocios (ADM4405). Los bancos que aparecen no son clientes ni tienen relación con el proyecto.</div>
 </div></footer>
 
+<script src="config.js"></script>
+<script src="sesion.js?v=menu-1"></script>
 </body>
 </html>

@@ -146,6 +146,7 @@
         return Promise.all([perfil(), rest("/clientes?select=id,nombre")]).then(function (res) {
           var p = res[0], nombres = {}; res[1].forEach(function (c) { nombres[c.id] = c.nombre; });
           barra(s.correo, p && nombres[p.cliente_id]);
+          menu();
           if (p && p.aprobado) { caja.hidden = true; contenido.hidden = false; listo(p); return; }
           contenido.hidden = true; caja.hidden = false; caja.textContent = ""; if (estado) estado.textContent = "";
           var card = el("div", "card acceso");
@@ -165,5 +166,24 @@
     revisar();
   }
 
-  window.DomiguardSesion = { encabezados: encabezados, proteger: proteger, salir: salir };
+  /* Menú según la cuenta: el visitante ve "Entrar"; una cuenta con plan aceptado ve Tendencias y Panel del cliente;
+     una cuenta sin plan aceptado ve "Mi cuenta". Los elementos llevan data-menu="cliente" o data-menu="visitante". */
+  function menu() {
+    function poner(modo) {
+      document.querySelectorAll('[data-menu="cliente"]').forEach(function (e) { e.hidden = modo !== "cliente"; });
+      document.querySelectorAll('[data-menu="visitante"]').forEach(function (e) {
+        e.hidden = modo === "cliente";
+        var a = e.querySelector("a") || e; if (a.dataset.textoVisitante === undefined) a.dataset.textoVisitante = a.textContent;
+        a.textContent = modo === "pendiente" ? "Mi cuenta" : a.dataset.textoVisitante;
+      });
+    }
+    if (!BASE) { poner("cliente"); return Promise.resolve(); }      // demostración sin base: todo visible
+    return vigente().then(function (s) {
+      if (!s) { poner("visitante"); return; }
+      return perfil().then(function (p) { poner(p && p.aprobado ? "cliente" : "pendiente"); });
+    }).catch(function () { poner(actual ? "pendiente" : "visitante"); });
+  }
+
+  window.DomiguardSesion = { encabezados: encabezados, proteger: proteger, salir: salir, menu: menu };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", menu); else menu();
 })();

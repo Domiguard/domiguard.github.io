@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="img/icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=contratos-1">
+<link rel="stylesheet" href="styles.css?v=menu-1">
 </head>
 <body>
 <a class="skip" href="#tendencias">Saltar al contenido</a>
@@ -18,8 +18,9 @@
   <ul>
     <li><a class="l" href="index.html">Inicio</a></li>
     <li><a class="l" href="planes.html">Planes</a></li>
-    <li><a class="l" href="tendencias.html" aria-current="page">Tendencias</a></li>
-    <li><a class="btn-nav" href="panel.html">Panel del cliente</a></li>
+    <li data-menu="cliente" hidden><a class="l" href="tendencias.html" aria-current="page">Tendencias</a></li>
+    <li data-menu="cliente" hidden><a class="btn-nav" href="panel.html">Panel del cliente</a></li>
+    <li data-menu="visitante"><a class="btn-nav" href="panel.html">Entrar</a></li>
   </ul>
 </div></nav>
 
@@ -62,7 +63,7 @@
 </div></footer>
 
 <script src="config.js"></script>
-<script src="sesion.js?v=confirmar-1"></script>
+<script src="sesion.js?v=menu-1"></script>
 <script src="tendencias.js?v=cuentas-1"></script>
 </body>
 </html>

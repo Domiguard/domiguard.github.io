@@ -293,3 +293,5 @@ footer img{height:40px}
 .ej-al .mono{color:#1F3864}
 .ej-al .p-mid{background:rgba(255,242,204,.95);color:#6B4500}
 .acceso .btn{align-self:flex-start;text-align:center}
+/* lo marcado como oculto queda oculto aunque su clase le dé otro display (botones del menú según la cuenta) */
+[hidden]{display:none !important}
