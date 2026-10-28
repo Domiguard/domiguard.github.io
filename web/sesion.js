@@ -88,7 +88,7 @@
       .then(function (d) { var s = aSesion(d); if (s) guardar(s); return s; });   // sin sesión si Supabase pide confirmar el correo
   }
   function salir() { var s = actual; guardar(null); if (s) auth("/logout", {}, s.access_token).catch(function () {}); location.reload(); }
-  function perfil() { return rest("/perfiles?select=cliente_id,aprobado,correo").then(function (f) { return f[0] || null; }); }
+  function perfil() { return rest("/perfiles?select=user_id,cliente_id,aprobado,correo").then(function (f) { return f[0] || null; }); }
 
   /* ---------- pantalla de acceso ---------- */
   function campo(id, texto, tipo, extra) {

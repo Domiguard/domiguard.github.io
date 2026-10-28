@@ -25,6 +25,8 @@
     if (dias >= 60) return "Registrado hace " + Math.round(dias / 30) + " meses";
     return "Registrado hace " + (dias === 0 ? "menos de un día" : dias === 1 ? "1 día" : dias + " días");
   }
+  /* folio del caso: DG-año de detección-número fijo que pone la base */
+  function folio(a) { return a.folio ? "DG-" + String(a.creada_en).slice(0, 4) + "-" + String(a.folio).padStart(5, "0") : ""; }
   function defang(a) { return (a.tls ? "hxxps://" : "hxxp://") + String(a.host || "").replace(/\./g, "[.]"); }
   function ultimoDia() {
     if (S.estado && S.estado.dia) return S.estado.dia;
@@ -81,13 +83,14 @@
     art.appendChild(top);
     art.appendChild(el("div", "", a.motivo || ""));
     var meta = el("div", "al-meta");
-    [ antiguedad(a), "Puntaje " + a.puntaje, a.pais || null, "Detectado el " + fmtDay(a.creada_en), "Estado: " + (ESTADOS[a.estado] || a.estado),
+    [ folio(a) ? "Folio " + folio(a) : null, antiguedad(a), "Puntaje " + a.puntaje, a.pais || null, "Detectado el " + fmtDay(a.creada_en), "Estado: " + (ESTADOS[a.estado] || a.estado),
       a.dns_ok === false ? "El sitio ya no responde" : null ].forEach(function (t) { if (t) meta.appendChild(el("span", "", t)); });
     art.appendChild(meta);
 
     var det = el("details"), sm = el("summary", "", "Ver evidencia"); det.appendChild(sm);
     var ev = el("div", "ev"), a1 = el("div"), dl = el("dl");
     a1.appendChild(el("h4", "", "Evidencia"));
+    if (folio(a)) fila(dl, "Folio", folio(a));
     fila(dl, "Dirección", defang(a));
     if (CANAL[a.canal]) fila(dl, "Cómo lo encontramos", CANAL[a.canal]);
     fila(dl, "Imita a", (clienteActual() || {}).nombre || "");
@@ -100,12 +103,67 @@
     if (e.correo_abuso) fila(dl, "Correo de abuso", e.correo_abuso);
     if (a.asn) fila(dl, "ASN", a.asn);
     a1.appendChild(dl); ev.appendChild(a1);
+    var a2 = el("div"), linea = el("ol", "historial"); a2.appendChild(el("h4", "", "Historial"));
+    linea.appendChild(el("li", "tiny", "Cargando…")); a2.appendChild(linea); ev.appendChild(a2);
     det.appendChild(ev);
+    /* el historial se pide a la base solo al abrir la evidencia */
+    var pedido = false;
+    function abrir() { if (det.open && !pedido) { pedido = true; historial(a).then(function (h) { pintarHistorial(linea, h); }, function () { pedido = false; linea.textContent = ""; linea.appendChild(el("li", "tiny", "No se pudo cargar el historial.")); }); } }
+    det.addEventListener("toggle", abrir);
     det.appendChild(reportar(a));
     det.appendChild(acciones(a));
-    if (S.abierta === a.id) det.open = true;
+    if (S.abierta === a.id) { det.open = true; abrir(); }
     art.appendChild(det);
     return art;
+  }
+
+  /* ---------- historial de la alerta (tabla alertas_historial: la escribe solo la base) ---------- */
+  var HECHO = { enviada: "El robot te avisó por correo", en_baja: "Marcada: se pidió la baja", dada_de_baja: "Marcada: ya la dieron de baja",
+                falsa_alarma: "Marcada como falsa alarma", nueva: "Volvió a «Nueva»" };
+  function historial(a) {
+    if (a._historial) return Promise.resolve(a._historial);
+    var cfg = window.DOMIGUARD_CONFIG || {};
+    if (!cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL)) { a._historial = historialDemo(a); return Promise.resolve(a._historial); }
+    return window.DomiguardSesion.encabezados().then(function (h) {
+      return fetch(cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/alertas_historial?select=en,evento,antes,despues,por,solo_fecha&alerta_id=eq." +
+                   encodeURIComponent(a.id) + "&order=en.asc,id.asc", { headers: h });
+    }).then(function (r) { if (!r.ok) throw new Error("historial " + r.status); return r.json(); })
+      .then(function (filas) { a._historial = filas; return filas; });
+  }
+  /* demostración: lo que se sabe de la alerta de ejemplo */
+  function historialDemo(a) {
+    var h = [{ en: a.detectada_en || a.creada_en + "T06:00:00-06:00", evento: "detectada", despues: a.canal, solo_fecha: !a.detectada_en }];
+    if (a.enviada_en) h.push({ en: a.enviada_en, evento: "estado", antes: "nueva", despues: "enviada" });
+    (a._cambios || []).forEach(function (c) { h.push(c); });
+    return h;
+  }
+  function cuando(f) {
+    var o = { timeZone: "America/Merida", day: "numeric", month: "short", year: "numeric" };
+    if (!f.solo_fecha) { o.hour = "2-digit"; o.minute = "2-digit"; }
+    return new Date(f.en).toLocaleString("es-MX", o);
+  }
+  function quien(f) {
+    if (f.evento !== "estado" || !f.por) return "Robot de Domiguard";
+    return S.perfil && f.por === S.perfil.user_id ? "Tú" : "Otra persona de tu equipo";
+  }
+  function textoHistorial(f) {
+    if (f.evento === "detectada") return "Detectada" + (CANAL[f.despues] ? " · " + CANAL[f.despues] : "");
+    if (f.evento === "estado") return HECHO[f.despues] || "Estado: " + (ESTADOS[f.despues] || f.despues);
+    if (f.evento === "prioridad") return "La prioridad cambió de " + f.antes + " a " + f.despues;
+    if (f.evento === "dns") return f.despues === "no_responde" ? "El sitio dejó de responder (revisión por DNS)"
+      : f.antes === "no_responde" ? "El sitio volvió a responder (revisión por DNS)" : "El sitio responde (revisión por DNS)";
+    return f.evento;
+  }
+  function pintarHistorial(linea, filas) {
+    linea.textContent = "";
+    if (!filas.length) { linea.appendChild(el("li", "tiny", "Todavía no hay movimientos guardados.")); return; }
+    filas.forEach(function (f) {
+      var li = el("li");
+      li.appendChild(el("span", "h-cuando", cuando(f)));
+      li.appendChild(el("span", "h-que", textoHistorial(f)));
+      li.appendChild(el("span", "h-quien", quien(f)));
+      linea.appendChild(li);
+    });
   }
 
   /* ---------- pedir que los navegadores lo bloqueen: formularios oficiales, vacíos (el dominio nunca va en el enlace) ---------- */
@@ -151,7 +209,7 @@
         if (a.estado === b[0]) return;
         fila.querySelectorAll("button").forEach(function (x) { x.disabled = true; }); aviso.textContent = "Guardando…";
         marcar(a, b[0]).then(function () {
-          S.abierta = a.id; renderKpis(); renderChips(); renderCanales(); renderLista();
+          a._historial = null; S.abierta = a.id; renderKpis(); renderChips(); renderCanales(); renderLista();
           // si con el filtro actual la alerta ya no se ve, se avisa a dónde pasó
           var sigue = (S.visibles || []).some(function (x) { return x.id === a.id; });
           avisoLista(sigue ? "" : "Guardado: " + a.host.replace(/\./g, "[.]") + " pasó a «" + (ABIERTA[a.estado] ? "Abiertas" : "Cerradas") + "».");
@@ -174,6 +232,8 @@
     var cfg = window.DOMIGUARD_CONFIG || {};
     if (!cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL)) {          // demostración: solo en esta pantalla
       var ahora = new Date().toISOString();
+      (a._cambios = a._cambios || []).push({ en: ahora, evento: "estado", antes: a.estado, despues: estado, por: "demo" });
+      S.perfil = S.perfil || { user_id: "demo" };
       a.estado = estado;
       a.baja_pedida_en = estado === "nueva" ? null : (estado === "en_baja" || estado === "dada_de_baja") ? (a.baja_pedida_en || ahora) : a.baja_pedida_en;
       a.dada_de_baja_en = estado === "dada_de_baja" ? (a.dada_de_baja_en || ahora) : null;
@@ -205,7 +265,7 @@
   function renderLista() {
     var rows = delCliente().filter(function (a) {
       if (S.canal !== "todos" && a.canal !== S.canal) return false;
-      if (S.busqueda && String(a.host || "").toLowerCase().indexOf(S.busqueda) < 0) return false;
+      if (S.busqueda && String(a.host || "").toLowerCase().indexOf(S.busqueda) < 0 && folio(a).toLowerCase().indexOf(S.busqueda) < 0) return false;
       if (S.filtro === "abiertas") return ABIERTA[a.estado];
       if (S.filtro === "alta") return ABIERTA[a.estado] && a.prioridad === "alta";
       if (S.filtro === "cerradas") return !ABIERTA[a.estado];
@@ -217,7 +277,7 @@
     if (csv) csv.disabled = !rows.length;
     var box = $("m-list"); box.textContent = ""; $("m-empty").hidden = rows.length > 0;
     $("m-empty").textContent = !delCliente().length ? "Sin alertas por ahora. Seguimos vigilando tus dominios todos los días."
-      : S.busqueda ? "Ningún dominio contiene «" + S.busqueda + "» con este filtro." : "No hay alertas con este filtro.";
+      : S.busqueda ? "Ningún dominio ni folio contiene «" + S.busqueda + "» con este filtro." : "No hay alertas con este filtro.";
     rows.forEach(function (a) { box.appendChild(tarjeta(a)); });
   }
   /* ---------- descarga en CSV (lo que se ve con los filtros activos, con la evidencia completa) ---------- */
@@ -228,6 +288,7 @@
   }
   /* las mismas columnas para Excel y CSV: encabezados, ancho en Excel y valor de cada alerta */
   var COLUMNAS = [
+    ["Folio", 15, function (a) { return folio(a); }],
     ["Prioridad", 11, function (a) { return { alta: "Alta", media: "Media", baja: "Baja" }[a.prioridad] || a.prioridad; }],
     ["Dominio", 34, function (a) { return a.host; }],
     ["Dirección desactivada", 40, function (a) { return defang(a); }],
@@ -276,7 +337,11 @@
   function cargarDatos() {
     var cfg = window.DOMIGUARD_CONFIG || {};
     var demo = !cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL);
-    function usar(d) { S.clientes = d.clientes || []; S.alertas = d.alertas || []; S.estado = d.estado || null; }
+    function usar(d) {
+      S.clientes = d.clientes || []; S.alertas = d.alertas || []; S.estado = d.estado || null;
+      if (demo) S.alertas.slice().sort(function (x, y) { return x.creada_en < y.creada_en ? -1 : x.creada_en > y.creada_en ? 1 : 0; })
+        .forEach(function (a, i) { if (!a.folio) a.folio = i + 1; });
+    }
     if (demo) {
       if (window.DOMIGUARD_DEMO) { usar(window.DOMIGUARD_DEMO); return Promise.resolve(); }
       return fetch("data/demo.json").then(function (r) { return r.json(); }).then(usar);

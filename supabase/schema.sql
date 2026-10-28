@@ -249,3 +249,80 @@ begin
 end $$;
 revoke all on function public.marcar_alerta(text, text) from public, anon;
 grant execute on function public.marcar_alerta(text, text) to authenticated;
+
+-- Folio e historial de cada alerta (expediente). folio: número fijo del caso; el panel lo muestra como
+-- DG-AAAA-00123 (año de detección). Las alertas que ya existían reciben su folio por orden de detección.
+create sequence if not exists alertas_folio_seq;
+alter table alertas add column if not exists folio bigint;
+update alertas a set folio = n.num
+  from (select id, (select coalesce(max(folio), 0) from alertas) + row_number() over (order by creada_en, detectada_en, id) as num
+          from alertas where folio is null) n
+ where a.id = n.id;
+select setval('alertas_folio_seq', (select coalesce(max(folio), 0) + 1 from alertas), false);
+alter table alertas alter column folio set default nextval('alertas_folio_seq');
+create unique index if not exists alertas_folio_idx on alertas (folio);
+
+-- Historial: una fila por cada cosa que le pasó a la alerta. Lo escribe solo la base (disparador), nadie más.
+-- evento: detectada (despues = canal), estado (antes/despues = estado), prioridad (antes/despues) o
+-- dns (despues = responde / no_responde; revisión por DNS, no se abre el sitio).
+-- por: la cuenta que hizo el cambio desde el panel; vacío = el robot. solo_fecha: de las alertas que ya
+-- existían solo se sabe el día de detección, no la hora.
+create table if not exists alertas_historial (
+  id          bigserial primary key,
+  alerta_id   text not null references alertas(id) on delete cascade,
+  cliente_id  text not null,
+  en          timestamptz not null default now(),
+  evento      text not null check (evento in ('detectada', 'estado', 'prioridad', 'dns')),
+  antes       text,
+  despues     text,
+  por         uuid,
+  solo_fecha  boolean not null default false
+);
+create index if not exists alertas_historial_alerta_idx on alertas_historial (alerta_id, en);
+alter table alertas_historial enable row level security;
+drop policy if exists "historial de mi banco" on alertas_historial;
+create policy "historial de mi banco" on alertas_historial for select to authenticated
+  using (exists (select 1 from perfiles p where p.user_id = auth.uid() and p.aprobado and p.cliente_id = alertas_historial.cliente_id));
+
+create or replace function public.anotar_historial() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into alertas_historial (alerta_id, cliente_id, en, evento, despues)
+    values (new.id, new.cliente_id, new.detectada_en, 'detectada', new.canal);
+    return null;
+  end if;
+  if new.estado is distinct from old.estado then
+    insert into alertas_historial (alerta_id, cliente_id, evento, antes, despues, por)
+    values (new.id, new.cliente_id, 'estado', old.estado, new.estado, auth.uid());   -- auth.uid() vacío = el robot
+  end if;
+  if new.prioridad is distinct from old.prioridad then
+    insert into alertas_historial (alerta_id, cliente_id, evento, antes, despues)
+    values (new.id, new.cliente_id, 'prioridad', old.prioridad, new.prioridad);
+  end if;
+  if new.dns_ok is not null and new.dns_ok is distinct from old.dns_ok then
+    insert into alertas_historial (alerta_id, cliente_id, evento, antes, despues)
+    values (new.id, new.cliente_id, 'dns',
+            case when old.dns_ok then 'responde' when old.dns_ok = false then 'no_responde' end,
+            case when new.dns_ok then 'responde' else 'no_responde' end);
+  end if;
+  return null;
+end $$;
+drop trigger if exists al_cambiar_alerta on alertas;
+create trigger al_cambiar_alerta after insert or update on alertas for each row execute function public.anotar_historial();
+
+-- Historial de las alertas que ya existían, con lo que se sabe de ellas (solo si todavía no tienen historial).
+-- detectada_en se agregó después que creada_en: si no coinciden en el día, solo se conoce el día.
+insert into alertas_historial (alerta_id, cliente_id, en, evento, antes, despues, por, solo_fecha)
+select a.id, a.cliente_id, x.en, x.evento, x.antes, x.despues, x.por, x.solo_fecha
+  from alertas a
+  cross join lateral (values
+    (case when (a.detectada_en at time zone 'America/Merida')::date = a.creada_en then a.detectada_en
+          else a.creada_en::timestamp at time zone 'America/Merida' end,
+     'detectada', null::text, a.canal, null::uuid, (a.detectada_en at time zone 'America/Merida')::date <> a.creada_en),
+    (a.enviada_en, 'estado', 'nueva', 'enviada', null::uuid, false),
+    (a.baja_pedida_en, 'estado', null, 'en_baja', a.estado_cambiado_por, false),
+    (a.dada_de_baja_en, 'estado', null, 'dada_de_baja', a.estado_cambiado_por, false)
+  ) as x(en, evento, antes, despues, por, solo_fecha)
+ where x.en is not null
+   and not exists (select 1 from alertas_historial h where h.alerta_id = a.id);
