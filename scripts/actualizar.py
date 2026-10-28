@@ -289,23 +289,31 @@ def alertas_desde_variantes(clientes, hoy, resolver, maximo=900, limite_seg=240)
     """Camino B: variantes de los dominios oficiales que ya existen en DNS.
 
     `resolver(host)` devuelve True, False o None (como `resuelve`).
-    Devuelve (sitios_nuevos, alertas, cuantas_variantes_se_vigilan_por_cliente).
+    Devuelve (sitios_nuevos, alertas, cuantas_variantes_se_vigilan_por_cliente, revisadas), donde `revisadas` son
+    las filas de la tabla variantes: cada variante con su dominio oficial y si existe (None = no respondió).
     """
     candidatos, vigiladas = [], {}
     for c in clientes:
         n = 0
         for dom in c["dominios"]:
             for v in D.variantes(dom, maximo):
-                candidatos.append((c, v))
+                candidatos.append((c, v, dom))
                 n += 1
         vigiladas[c["id"]] = n
-    existen = set()
+    existen, revisadas = set(), {}
+    ahora = datetime.now(timezone.utc).isoformat()
     with ThreadPoolExecutor(max_workers=32) as ex:
-        futs = {ex.submit(resolver, v): (c["id"], v) for c, v in candidatos}
+        futs = {ex.submit(resolver, v): (c["id"], v, dom) for c, v, dom in candidatos}
         try:
             for fut in as_completed(futs, timeout=limite_seg):
-                if fut.result():
-                    existen.add(futs[fut])
+                cid, v, dom = futs[fut]
+                ok = fut.result()
+                if ok:
+                    existen.add((cid, v))
+                # una variante puede salir de dos dominios oficiales del mismo banco: se guarda una vez
+                if (cid, v) not in revisadas or ok:
+                    revisadas[(cid, v)] = {"cliente_id": cid, "host": v, "dominio_oficial": dom,
+                                           "existe": ok, "revisada_en": ahora}
         except FuturesTimeout:
             print("Aviso: se acabó el tiempo de la búsqueda de variantes; se usan las que alcanzaron a responder.")
     por_id = {c["id"]: c for c in clientes}
@@ -322,7 +330,7 @@ def alertas_desde_variantes(clientes, hoy, resolver, maximo=900, limite_seg=240)
             "puntaje": puntaje(x), "tls": None, "fuente": "busqueda", "dns_ok": True, "x": x}
         sitios[s["id"]] = s
         alertas.append(construir_alerta(s, c, coin, "busqueda", False, True, hoy))
-    return list(sitios.values()), alertas, vigiladas
+    return list(sitios.values()), alertas, vigiladas, list(revisadas.values())
 
 
 def alertas_desde_registros(dominios, clientes, hoy, resolver):
@@ -504,6 +512,12 @@ class Base:
             self._pedir("POST", f"/{tabla}?on_conflict=id", filas[i:i+200],
                         {"Prefer": "resolution=ignore-duplicates,return=minimal"})
 
+    def guardar_variantes(self, filas):
+        """Upsert en la tabla variantes: la última revisión de cada variante (existe_desde lo pone la base)."""
+        for i in range(0, len(filas), 500):
+            self._pedir("POST", "/variantes?on_conflict=cliente_id,host", filas[i:i+500],
+                        {"Prefer": "resolution=merge-duplicates,return=minimal"})
+
     def actualizar(self, tabla, ids, cambios):
         """PATCH de las filas con esos ids. (Un upsert parcial fallaría por las columnas obligatorias.)"""
         ids = list(ids)
@@ -670,7 +684,12 @@ def main():
         db.insertar("sitios", [f for f in filas_pd if f["id"] not in existentes])
         filas += [f for f in filas_pd if f["id"] not in {x["id"] for x in filas}]
         alertas = alertas_desde_fuente(filas, clientes, hoy)
-        sitios_b, alertas_b, vigiladas = alertas_desde_variantes(clientes, hoy, resuelve)
+        sitios_b, alertas_b, vigiladas, revisadas = alertas_desde_variantes(clientes, hoy, resuelve)
+        try:
+            db.guardar_variantes(revisadas)
+            print(f"Variantes guardadas: {len(revisadas)} ({sum(1 for r in revisadas if r['existe'])} existen)")
+        except RuntimeError as e:       # si falta la tabla, la corrida sigue igual
+            print("Aviso: no se pudo guardar la lista de variantes:", e)
         # Camino C, solo en la corrida completa y cuando la lista cambia (más o menos una vez al día)
         sitios_c, alertas_c, nrd = [], [], {}
         if not a.rapida:

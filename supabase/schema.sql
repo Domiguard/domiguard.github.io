@@ -188,3 +188,32 @@ begin
 end $$;
 drop trigger if exists al_crear_solicitud on solicitudes;
 create trigger al_crear_solicitud after insert on solicitudes for each row execute function public.avisar_solicitud();
+
+-- Registro de variantes: cada variante de los dominios oficiales que el robot revisa por DNS, con su último
+-- resultado. Se sobrescribe en cada corrida (una fila por banco y variante), así que no crece sin límite.
+-- existe: true = el dominio existe en DNS, false = no existe, vacío = no respondió a tiempo.
+-- existe_desde: la primera vez que el robot la vio existir (lo pone la base). Solo la ve el equipo (Table Editor).
+create table if not exists variantes (
+  cliente_id       text not null references clientes(id) on delete cascade,
+  host             text not null,
+  dominio_oficial  text not null,
+  existe           boolean,
+  revisada_en      timestamptz not null default now(),
+  existe_desde     timestamptz,
+  primary key (cliente_id, host)
+);
+create index if not exists variantes_existe_idx on variantes (existe, revisada_en desc);
+alter table variantes enable row level security;
+create or replace function public.marcar_existe_desde() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if tg_op = 'UPDATE' then
+    new.existe_desde := old.existe_desde;
+  end if;
+  if new.existe and new.existe_desde is null then
+    new.existe_desde := new.revisada_en;
+  end if;
+  return new;
+end $$;
+drop trigger if exists al_guardar_variante on variantes;
+create trigger al_guardar_variante before insert or update on variantes for each row execute function public.marcar_existe_desde();
