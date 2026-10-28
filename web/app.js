@@ -92,10 +92,41 @@
     if (a.asn) fila(dl, "ASN", a.asn);
     a1.appendChild(dl); ev.appendChild(a1);
     det.appendChild(ev);
+    det.appendChild(reportar(a));
     det.appendChild(acciones(a));
     if (S.abierta === a.id) det.open = true;
     art.appendChild(det);
     return art;
+  }
+
+  /* ---------- pedir que los navegadores lo bloqueen: formularios oficiales, vacíos (el dominio nunca va en el enlace) ---------- */
+  var FORMULARIOS = [["Reportar a Google", "https://safebrowsing.google.com/safebrowsing/report_phish/?hl=es"],
+                     ["Reportar a Microsoft", "https://www.microsoft.com/en-us/wdsi/support/report-unsafe-site-guest"]];
+  function copiar(texto) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(texto);
+    return new Promise(function (ok, mal) {
+      var t = el("textarea"); t.value = texto; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+      document.body.appendChild(t); t.select();
+      try { document.execCommand("copy") ? ok() : mal(); } catch (e) { mal(e); } finally { t.remove(); }
+    });
+  }
+  function reportar(a) {
+    var caja = el("div", "marcar"), fila = el("div", "acciones");
+    caja.appendChild(el("h4", "", "Pide que los navegadores lo bloqueen"));
+    caja.appendChild(el("p", "tiny", "Copia la dirección y pégala en el formulario. Así Chrome y Edge muestran una advertencia a quien intente entrar."));
+    var cp = el("button", "chip", "Copiar dirección"); cp.type = "button";
+    cp.onclick = function () {
+      copiar((a.tls ? "https://" : "http://") + a.host)
+        .then(function () { cp.textContent = "Copiada"; setTimeout(function () { cp.textContent = "Copiar dirección"; }, 2500); })
+        .catch(function () { cp.textContent = "No se pudo copiar"; });
+    };
+    fila.appendChild(cp);
+    FORMULARIOS.forEach(function (f) {
+      var l = el("a", "chip", f[0] + " ↗"); l.href = f[1]; l.target = "_blank"; l.rel = "noopener noreferrer";
+      fila.appendChild(l);
+    });
+    caja.appendChild(fila);
+    return caja;
   }
 
   /* ---------- el cliente marca el estado de la alerta (función marcar_alerta de la base: solo su banco) ---------- */
