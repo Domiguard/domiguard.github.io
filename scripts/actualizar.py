@@ -285,7 +285,7 @@ def alertas_desde_fuente(filas, clientes, hoy):
     return out
 
 
-def alertas_desde_variantes(clientes, hoy, resolver, maximo=900, limite_seg=240):
+def alertas_desde_variantes(clientes, hoy, resolver, maximo=900, limite_seg=300):
     """Camino B: variantes de los dominios oficiales que ya existen en DNS.
 
     `resolver(host)` devuelve True, False o None (como `resuelve`).
@@ -294,15 +294,20 @@ def alertas_desde_variantes(clientes, hoy, resolver, maximo=900, limite_seg=240)
     """
     candidatos, vigiladas = [], {}
     for c in clientes:
-        n = 0
+        propias = set()
         for dom in c["dominios"]:
             for v in D.variantes(dom, maximo):
-                candidatos.append((c, v, dom))
-                n += 1
-        vigiladas[c["id"]] = n
+                if v not in propias:
+                    propias.add(v)
+                    candidatos.append((c, v, dom))
+        for v in D.combinaciones(c):                       # marca + palabra de engaño (santander-login.com)
+            if v not in propias:
+                propias.add(v)
+                candidatos.append((c, v, c["dominios"][0]))
+        vigiladas[c["id"]] = len(propias)
     existen, revisadas = set(), {}
     ahora = datetime.now(timezone.utc).isoformat()
-    with ThreadPoolExecutor(max_workers=32) as ex:
+    with ThreadPoolExecutor(max_workers=64) as ex:
         futs = {ex.submit(resolver, v): (c["id"], v, dom) for c, v, dom in candidatos}
         try:
             for fut in as_completed(futs, timeout=limite_seg):
@@ -310,10 +315,8 @@ def alertas_desde_variantes(clientes, hoy, resolver, maximo=900, limite_seg=240)
                 ok = fut.result()
                 if ok:
                     existen.add((cid, v))
-                # una variante puede salir de dos dominios oficiales del mismo banco: se guarda una vez
-                if (cid, v) not in revisadas or ok:
-                    revisadas[(cid, v)] = {"cliente_id": cid, "host": v, "dominio_oficial": dom,
-                                           "existe": ok, "revisada_en": ahora}
+                revisadas[(cid, v)] = {"cliente_id": cid, "host": v, "dominio_oficial": dom,
+                                       "existe": ok, "revisada_en": ahora}
         except FuturesTimeout:
             print("Aviso: se acabó el tiempo de la búsqueda de variantes; se usan las que alcanzaron a responder.")
     por_id = {c["id"]: c for c in clientes}
@@ -348,8 +351,9 @@ def alertas_desde_registros(dominios, clientes, hoy, resolver):
     hallados = []
     for h in dominios:
         sk = D.esqueleto(h.replace(".", ""))
+        sk_partes = [D.esqueleto(x) for x in re.split(r"[.\-_]", h)]
         for c in clientes:
-            if any(k in sk for k in claves[c["id"]]):
+            if any(k in sk or any(k in x for x in sk_partes) for k in claves[c["id"]]):
                 coin = D.coincidencia(h, None, c)
                 if coin:
                     hallados.append((c, h, coin))

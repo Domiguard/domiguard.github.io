@@ -30,6 +30,13 @@ PLATAFORMAS = (
 )
 PALABRAS_TIPICAS = ["seguro", "login", "acceso", "verifica", "soporte", "app", "clientes", "banca", "online"]
 TERMINACIONES = ["com", "net", "org", "mx", "co", "online", "xyz", "info", "site", "top"]
+# Combinaciones de la marca con palabras de engaño en varias terminaciones (santander-login.com, paypal-seguro.mx).
+PALABRAS_COMBINACION = [
+    "login", "seguro", "segura", "acceso", "verifica", "verificacion", "soporte", "app", "clientes", "banca",
+    "online", "enlinea", "mx", "mexico", "movil", "web", "cuenta", "pagos", "token", "ayuda",
+    "alerta", "bloqueo", "empresas", "update", "secure", "support", "account", "verify", "wallet", "servicio",
+]
+TERMINACIONES_COMBINACION = ["com", "mx", "com.mx", "net", "online", "site", "info", "app"]
 CONFUSOS = {"o": ["0"], "l": ["1", "i"], "i": ["1", "l"], "e": ["3"], "a": ["4"], "s": ["5"],
             "m": ["rn"], "w": ["vv"], "d": ["cl"], "g": ["q"], "u": ["v"], "n": ["m"]}
 
@@ -120,7 +127,8 @@ def coincidencia(host, marca_fuente, cliente):
         # Nombres cortos (bbva, hsbc): la parte debe ser la marca tal cual. Igualando letras confundibles
         # (8 por b, 4 por a) salen coincidencias al azar entre cientos de miles de dominios.
         en_partes = any(sp == cruda for sp in partes) if len(p) < 5 else any(sp == p for sp in sk_partes)
-        en_texto = len(p) >= 5 and p in sk_host
+        # también parte por parte: al juntar "santander" y "net" la r y la n se leerían como m
+        en_texto = len(p) >= 5 and (p in sk_host or any(p in sp for sp in sk_partes))
         if en_partes or en_texto:
             return {"tipo": "marca_en_dominio", "dist": None, "similitud": 70, "oficial": cliente["dominios"][0],
                     "plataforma": plataforma,
@@ -227,6 +235,28 @@ def variantes(dominio, maximo=900):
             vistos.add(d)
             res.append(d)
     return res[:maximo]
+
+
+def combinaciones(cliente):
+    """La marca del cliente junto a palabras de engaño, en varias terminaciones (lista sin repetidos).
+    Marcas cortas (bbva, hsbc): solo con guion (bbva-login.com); pegadas (bbvalogin) la regla de
+    coincidencia no las toma, porque entre millones de dominios salen al azar."""
+    marcas = {p.lower() for p in (cliente.get("palabras") or [cliente["marca"]]) if p}
+    marcas |= {registrable(d)[0] for d in cliente["dominios"]}
+    oficiales = {d.lower() for d in cliente["dominios"]}
+    res, vistos = [], set()
+    for m in sorted(marcas):
+        if len(m) < 3 or not _valida(m):
+            continue
+        for k in PALABRAS_COMBINACION:
+            formas = [f"{m}-{k}", f"{k}-{m}"] + ([m + k, k + m] if len(m) >= 5 else [])
+            for et in formas:
+                for t in TERMINACIONES_COMBINACION:
+                    d = f"{et}.{t}"
+                    if d not in vistos and d not in oficiales and _valida(et):
+                        vistos.add(d)
+                        res.append(d)
+    return res
 
 
 # ---------- registro del dominio (RDAP): edad y a quién pedir la baja ----------
