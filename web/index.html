@@ -5,16 +5,17 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Domiguard</title>
 <meta name="description" content="Domiguard encuentra los sitios que suplantan a tu marca y te los entrega con evidencia, listos para darlos de baja.">
+<meta name="theme-color" content="#06141B">
 <link rel="icon" type="image/png" href="img/icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=menu-1">
+<link rel="stylesheet" href="styles.css?v=navy-1">
 </head>
 <body>
-<a class="skip" href="#servicio">Saltar al contenido</a>
+<a class="skip" href="#como">Saltar al contenido</a>
 
 <nav aria-label="Principal"><div class="wrap">
-  <a href="index.html" aria-label="Domiguard, inicio"><picture><source srcset="img/logo-oscuro.png" media="(prefers-color-scheme: dark)"><img src="img/logo.png" alt="Domiguard, sello de verificación de dominios"></picture></a>
+  <a href="index.html" aria-label="Domiguard, inicio"><img src="img/logo-navy.svg" alt="Domiguard, sello de verificación de dominios"></a>
   <ul>
     <li><a class="l" href="index.html" aria-current="page">Inicio</a></li>
     <li><a class="l" href="planes.html">Planes</a></li>
@@ -24,83 +25,142 @@
   </ul>
 </div></nav>
 
-<header class="hero" id="inicio"><div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div><div class="wrap">
-  <div class="tx">
+<header class="hero"><div class="wrap">
+  <div class="tx centro" style="display:flex;flex-direction:column;gap:22px">
     <div class="eyebrow">Para bancos, fintechs y plataformas de pago</div>
-    <h1>Encontramos los sitios que se hacen pasar por tu banco</h1>
-    <p>Domiguard vigila internet por ti, detecta los sitios falsos que imitan a tu banco o fintech y te los entrega con evidencia, listos para que los des de baja.</p>
-    <div class="btns"><a class="btn p" href="panel.html" data-menu="cliente" hidden>Ver el panel del cliente</a><a class="btn s" href="planes.html">Ver planes</a></div>
+    <h1>Ve el sitio falso antes que tus clientes.</h1>
+    <p>Domiguard vigila internet varias veces por hora, encuentra los sitios que imitan a tu banco y te entrega la evidencia para darlos de baja.</p>
+    <div class="btns"><a class="btn p" href="planes.html">Ver planes</a><a class="btn s" href="panel.html" data-menu="cliente" hidden>Abrir mi panel</a><a class="btn s" href="#evidencia" data-menu="visitante">Ver una alerta real</a></div>
   </div>
-  <div class="seal" aria-label="Alerta detectada">
-    <div class="tiny">Así llega una alerta a tu equipo de seguridad (detección real)</div>
-    <div class="alert-mini">
-      <div class="spread"><strong>Sitio sospechoso detectado</strong><span class="pill p-mid">Prioridad media</span></div>
-      <div class="mono">hxxps://bbva-amazonbookawar[.]elcorteingles[.]ph</div>
-      <div class="tiny">Usa el nombre «BBVA» en la dirección · detectado el 24 de octubre de 2026 · lo señala un reporte externo</div>
+  <div class="escena">
+    <div class="ventana" aria-label="Ejemplo del panel del cliente con detecciones reales">
+      <div class="v-barra" aria-hidden="true"><i></i><i></i><i></i><span>Panel del cliente · BBVA México</span></div>
+      <div class="v-cuerpo">
+        <div class="v-lado" aria-hidden="true"><b>Alertas</b><span>Tendencias</span><span>Descargar Excel</span></div>
+        <div class="v-main">
+          <div class="v-tit"><strong>Sitios que imitan a tu banco</strong><span class="tiny">Ordenados por prioridad</span></div>
+          <div class="v-fila alta"><span class="pill p-hi">Alta</span><span class="mono">hxxp://bbvalues[.]uk</span><span class="tiny" style="grid-column:auto">26 oct</span><span class="tiny">Reporte externo: la fuente lo señala como suplantación de BBVA</span></div>
+          <div class="v-fila alta"><span class="pill p-hi">Alta</span><span class="mono">hxxp://bbgva[.]com</span><span class="tiny" style="grid-column:auto">26 oct</span><span class="tiny">Variante de tu dominio: casi igual a bbva[.]mx, 1 carácter de diferencia</span></div>
+          <div class="v-fila media"><span class="pill p-mid">Media</span><span class="mono">hxxp://bbva-netcash-empr-login[.]cc</span><span class="tiny" style="grid-column:auto">27 oct</span><span class="tiny">Dominio recién registrado que usa el nombre de la marca</span></div>
+          <div class="v-fila baja"><span class="pill p-lo">Baja</span><span class="mono">hxxp://acceso-bbva[.]net</span><span class="tiny" style="grid-column:auto">27 oct</span><span class="tiny">Variante de tu dominio que usa el nombre de la marca</span></div>
+        </div>
+      </div>
+      <div class="v-nota">Detecciones reales tomadas de datos públicos. BBVA no es cliente de Domiguard ni tiene relación con el proyecto.</div>
     </div>
-    <div class="msg ok"><strong>Tú decides:</strong> pides la baja al proveedor, bloqueas el sitio o avisas a tus clientes. Te damos la evidencia.</div>
-    <div class="tiny">Detección real tomada de datos públicos. BBVA no es cliente de Domiguard ni tiene relación con el proyecto.</div>
   </div>
 </div></header>
 
+<div class="cifras" aria-label="Lo que revisó el robot en su última revisión">
+  <div><b data-cifra="variantes_vigiladas">—</b><span>variantes de los dominios de los bancos en cada revisión</span></div>
+  <div><b data-cifra="nrd_revisados">—</b><span>dominios recién registrados revisados en la última lista</span></div>
+  <div><b data-cifra="total">—</b><span>sitios de phishing reportados en nuestra base</span></div>
+  <div><b data-cifra="hora">—</b><span data-cifra="dia">última revisión (hora de Mérida)</span></div>
+</div>
+
 <main>
-<section class="blk" id="sector"><div class="wrap">
-  <h2>Hecho para el sector financiero</h2>
-  <p class="lead">Bancos, fintechs y plataformas de pago son el blanco favorito de los sitios falsos, porque ahí está el dinero de tus clientes.</p>
+<section class="blk" id="como"><div class="wrap">
+  <div class="cabeza centro"><div class="eyebrow">Cómo funciona</div><h2>Tres pasos. Tú solo decides.</h2>
+    <p class="lead">Nosotros hacemos el trabajo previo: buscar, confirmar y juntar la evidencia. Tu equipo decide qué hacer con cada sitio.</p></div>
   <div class="flow">
+    <div class="card"><span class="num">01</span><b>Vigilamos tu banco</b><span>Revisamos reportes públicos, miles de variantes de tus dominios y los dominios que se registran cada día en el mundo.</span></div>
+    <div class="card"><span class="num">02</span><b>Confirmamos el riesgo</b><span>Cada sitio recibe un puntaje de 0 a 100 y una prioridad: alta, media o baja. Así sabes por cuál empezar.</span></div>
+    <div class="card"><span class="num">03</span><b>Tú lo das de baja</b><span>Te damos el registrador y su correo de abuso para pedir la baja. Domiguard nunca entra a los sitios falsos.</span></div>
+  </div>
+</div></section>
+
+<section class="blk alt"><div class="wrap">
+  <div class="fila">
+    <div class="fila-tx"><div class="eyebrow">Búsqueda</div><h2>Tres formas de buscar. Una sola lista.</h2>
+      <p>Un sitio falso puede aparecer por cualquier lado. Por eso lo buscamos por tres caminos y juntamos todo en tu panel, sin repetidos.</p>
+      <ul class="lista-ok"><li>Errores de escritura como una letra cambiada o un guion de más</li><li>Tu marca junto a palabras como «login», «seguro» o «soporte»</li><li>La misma dirección con otra terminación (.net, .online, .app…)</li></ul></div>
+    <div class="fila-vis caminos">
+      <div class="card camino"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/></svg><b>Reportes públicos de phishing</b><span>Listas abiertas que la comunidad actualiza todo el tiempo.</span></div>
+      <div class="card camino"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><b>Variantes de tus dominios</b><span><span data-cifra="variantes_vigiladas">Miles de</span> direcciones parecidas a las tuyas, revisadas en cada pasada.</span></div>
+      <div class="card camino"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg><b>Dominios recién registrados</b><span><span data-cifra="nrd_revisados">Cientos de miles de</span> dominios nuevos revisados con la última lista.</span></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="blk" id="evidencia"><div class="wrap">
+  <div class="fila inv">
+    <div class="fila-tx"><div class="eyebrow">Evidencia</div><h2>Todo lo que necesitas para pedir la baja.</h2>
+      <p>Cada alerta llega con su prioridad, el motivo, la fecha de registro, quién vendió el dominio y a qué correo reportarlo. Así es una detección real:</p>
+      <p class="tiny">Detección real tomada de datos públicos. BBVA no es cliente de Domiguard ni tiene relación con el proyecto.</p></div>
+    <article class="fila-vis al media" aria-label="Ejemplo de alerta">
+      <div class="al-top"><span class="pill p-mid">Prioridad media</span><span class="mono">hxxp://bbva-netcash-empr-login[.]cc</span><span class="tag">Dominio recién registrado</span><span class="tag">Por revisar</span></div>
+      <div>Usa el nombre de la marca en la dirección</div>
+      <div class="al-meta"><span>Puntaje 100</span><span>Detectado el 27 oct</span><span>Estado: Nueva</span></div>
+      <div class="ev"><div><h4>Evidencia</h4><dl>
+        <dt>Imita a</dt><dd>BBVA México</dd>
+        <dt>Dominio oficial</dt><dd>bbva.mx</dd>
+        <dt>Registrado el</dt><dd>2026-10-21</dd>
+        <dt>Registrador</dt><dd>Gname.com Pte. Ltd.</dd>
+        <dt>Correo de abuso</dt><dd>complaint@gname.com</dd>
+        <dt>Sigue activo</dt><dd>Sí, su nombre responde en DNS</dd>
+      </dl></div></div>
+    </article>
+  </div>
+</div></section>
+
+<section class="blk alt"><div class="wrap">
+  <div class="fila">
+    <div class="fila-tx"><div class="eyebrow">Inteligencia de negocios</div><h2>Decide con datos, no con corazonadas.</h2>
+      <p>En Tendencias ves cuándo aparecen los sitios falsos, a qué banco imitan y cómo son sus dominios. Y todo tu panel se descarga en Excel con un clic.</p>
+      <ul class="lista-ok"><li>Alertas por día, por banco y por prioridad</li><li>Antigüedad de los dominios y terminaciones más usadas</li><li>Registradores que más se repiten</li></ul></div>
+    <div class="fila-vis card barras" aria-label="Alertas detectadas por banco al 27 de octubre de 2026">
+      <div class="spread"><b style="font-family:var(--f-display);font-size:19px;color:var(--n6)">Alertas por banco</b><span class="tiny">Detecciones reales al 27 oct 2026</span></div>
+      <div class="barra"><span>PayPal</span><i style="width:100%"></i><b>236</b></div>
+      <div class="barra"><span>Binance</span><i style="width:98.7%"></i><b>233</b></div>
+      <div class="barra"><span>Santander</span><i style="width:66.9%"></i><b>158</b></div>
+      <div class="barra"><span>BBVA</span><i style="width:48.7%"></i><b>115</b></div>
+      <div class="barra"><span>HSBC</span><i style="width:41.9%"></i><b>99</b></div>
+      <div class="barra"><span>Banorte</span><i style="width:38.6%"></i><b>91</b></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="blk" id="sector"><div class="wrap">
+  <div class="cabeza centro"><div class="eyebrow">Sector financiero</div><h2>Donde está el dinero, están los sitios falsos.</h2>
+    <p class="lead">Bancos, fintechs y plataformas de pago son el blanco favorito, porque ahí está el dinero de tus clientes.</p></div>
+  <div class="flow" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))">
     <div class="card"><b>Banca en línea falsa</b><span>Sitios que copian la pantalla de acceso de tu banco para robar usuario y contraseña.</span></div>
     <div class="card"><b>Pagos y transferencias</b><span>Páginas que imitan portales de pago, cobros o soporte para desviar el dinero de tus clientes.</span></div>
-    <div class="card"><b>Dominios casi idénticos</b><span>Direcciones con una letra cambiada, un guion de más o otra terminación, difíciles de notar a simple vista.</span></div>
-    <div class="card"><b>Tu equipo, con ventaja</b><span>Ves el sitio falso y cuentas con la evidencia para pedir su baja, sin buscar nada por tu cuenta.</span></div>
+    <div class="card"><b>Dominios casi idénticos</b><span>Direcciones con una letra cambiada, un guion de más u otra terminación, difíciles de notar a simple vista.</span></div>
+    <div class="card"><b>Tu equipo, con ventaja</b><span>Ves el sitio falso y ya tienes la evidencia para pedir su baja, sin buscar nada por tu cuenta.</span></div>
   </div>
 </div></section>
 
-<section class="blk alt" id="servicio"><div class="wrap">
-  <h2>Lo que hacemos por ti</h2>
-  <p class="lead">Nosotros hacemos el trabajo previo. Tú solo decides qué hacer con cada sitio.</p>
-  <div class="flow">
-    <div class="card"><b>1. Vigilamos tu banco</b><span>Buscamos todos los días sitios nuevos que usen el nombre de tu banco o se parezcan a tus dominios oficiales.</span></div>
-    <div class="card"><b>2. Confirmamos la suplantación</b><span>Cada sitio recibe un puntaje de riesgo. Separamos los que ya reporta una fuente externa de los que hay que revisar.</span></div>
-    <div class="card"><b>3. Te enviamos la alerta</b><span>Recibes un correo con el sitio, la evidencia y a quién pedirle la baja, además de verlo en tu panel.</span></div>
-    <div class="card"><b>4. Tú lo das de baja</b><span>Pides la baja al proveedor, lo bloqueas o avisas a tus clientes. Domiguard no contacta los sitios ni los tumba.</span></div>
+<section class="blk alt" id="preguntas"><div class="wrap">
+  <div class="cabeza centro"><div class="eyebrow">Preguntas frecuentes</div><h2>Es normal preguntar.</h2></div>
+  <div class="faq">
+    <details><summary>¿Domiguard entra a los sitios falsos?</summary><p>No. Solo preguntamos si el dominio existe (DNS) y consultamos su registro público (RDAP). Nunca abrimos ni contactamos un sitio sospechoso.</p></details>
+    <details><summary>¿Cada cuánto revisan?</summary><p>El robot corre solo varias veces por hora. En cada pasada revisa los reportes públicos y las variantes de tus dominios; la lista de dominios recién registrados se revisa cuando sale una nueva, más o menos una vez al día.</p></details>
+    <details><summary>¿De dónde salen los datos?</summary><p>De fuentes abiertas: PhishHunt y Phishing.Database para los reportes, la lista pública de dominios recién registrados y nuestra propia búsqueda de variantes por DNS.</p></details>
+    <details><summary>¿Qué significa la prioridad?</summary><p>Alta: un reporte externo con puntaje alto, o una dirección casi igual a la tuya registrada hace 60 días o menos. Media: un reporte con puntaje menor, o un dominio reciente que usa tu marca. Baja: existe, pero puede ser una compra del propio banco o un dominio de hace años.</p></details>
+    <details><summary>¿Cómo se activa mi panel?</summary><p>Contratas un plan con tu correo y creas tu cuenta con ese mismo correo. Cuando el equipo de Domiguard acepta la contratación, tu panel muestra solo las alertas de tu banco.</p></details>
+    <details><summary>¿Es un servicio real?</summary><p>Es un proyecto académico de Inteligencia de Negocios (ADM4405). Las detecciones son reales, pero el pago es de demostración y los bancos que aparecen no son clientes.</p></details>
   </div>
 </div></section>
-
-<section class="blk" id="incluye"><div class="wrap">
-  <h2>Qué recibe tu equipo de seguridad</h2>
-  <p class="lead">Todo lo necesario para actuar rápido, sin tener que buscar nada.</p>
-  <div class="flow">
-    <div class="card"><b>Alertas con evidencia</b><span>Cada sitio sospechoso llega con su prioridad, el motivo, la fecha de registro y a quién pedirle la baja.</span></div>
-    <div class="card"><b>Datos para pedir la baja</b><span>Cada alerta trae el registrador y el correo de abuso cuando están disponibles.</span></div>
-    <div class="card"><b>Aviso por correo</b><span>Cada mañana recibes las alertas nuevas con un archivo adjunto para tu equipo.</span></div>
-    <div class="card"><b>Panel del cliente</b><span>Ves todos los casos, su estado y cuáles ya se dieron de baja.</span></div>
-  </div>
-</div></section>
-
 </main>
-<section class="cta"><div class="wrap ejemplo">
-  <div class="ej-tx"><h2>Mira cómo se ve una alerta</h2><p>Así le llega a tu equipo cada sitio sospechoso: con su prioridad, el motivo y la evidencia para pedir la baja.</p><p class="tiny ej-nota">Detección real tomada de datos públicos. BBVA no es cliente de Domiguard ni tiene relación con el proyecto.</p></div>
-  <article class="al media ej-al" aria-label="Ejemplo de alerta">
-    <div class="al-top"><span class="pill p-mid">Prioridad media</span><span class="mono">hxxp://bbva-netcash-empr-login[.]cc</span><span class="tag">Dominio recién registrado</span><span class="tag">Por revisar</span></div>
-    <div>Usa el nombre de la marca en la dirección</div>
-    <div class="al-meta"><span>Puntaje 100</span><span>Detectado el 27 oct</span><span>Estado: Nueva</span></div>
-    <div class="ev"><div><h4>Evidencia</h4><dl>
-      <dt>Imita a</dt><dd>BBVA México</dd>
-      <dt>Dominio oficial</dt><dd>bbva.mx</dd>
-      <dt>Registrado el</dt><dd>2026-10-21</dd>
-      <dt>Registrador</dt><dd>Gname.com Pte. Ltd.</dd>
-      <dt>Correo de abuso</dt><dd>complaint@gname.com</dd>
-      <dt>Sigue activo</dt><dd>Sí, su nombre responde en DNS</dd>
-    </dl></div></div>
-  </article>
+
+<section class="final"><div class="wrap">
+  <div class="eyebrow">Empieza hoy</div>
+  <h2>Que tus clientes solo encuentren tu sitio.</h2>
+  <p>Elige un plan según los dominios que quieres proteger. Tu panel se activa en cuanto aceptamos la contratación.</p>
+  <div class="btns" style="justify-content:center"><a class="btn p" href="planes.html">Ver planes</a></div>
 </div></section>
 
 <footer><div class="wrap">
-  <img src="img/logo-oscuro.png" alt="Domiguard">
-  <div style="max-width:560px">Proyecto académico de Inteligencia de Negocios (ADM4405). Los bancos que aparecen no son clientes ni tienen relación con el proyecto.</div>
+  <div class="pie-marca"><img src="img/logo-navy.svg" alt="Domiguard"><span>Encontramos los sitios que se hacen pasar por tu banco y te damos la evidencia para darlos de baja.</span></div>
+  <div class="pie-cols">
+    <div><b>Producto</b><a href="index.html">Inicio</a><a href="planes.html">Planes</a><a href="panel.html">Panel del cliente</a></div>
+    <div><b>Ayuda</b><a href="#como">Cómo funciona</a><a href="#preguntas">Preguntas frecuentes</a></div>
+  </div>
+  <div class="pie-fin">Proyecto académico de Inteligencia de Negocios (ADM4405). Los bancos que aparecen no son clientes ni tienen relación con el proyecto.</div>
 </div></footer>
 
 <script src="config.js"></script>
 <script src="sesion.js?v=menu-1"></script>
+<script src="inicio.js?v=navy-1"></script>
 </body>
 </html>
