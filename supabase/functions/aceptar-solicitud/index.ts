@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
   if (!s) return respuesta({ error: "La solicitud ya no existe." }, 404);
 
   if (d.accion === "ver") {
-    const c = await base("/rest/v1/clientes?select=id,nombre&order=id");
+    const c = await base("/rest/v1/clientes?select=id,nombre,palabras&order=id");
     return respuesta({ solicitud: s, clientes: await c.json() });
   }
   if (s.estado === "activa" || s.estado === "descartada") {
@@ -109,20 +109,35 @@ Deno.serve(async (req) => {
   const banco = String(d.cliente_id || "").trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(banco)) return respuesta({ error: "El banco debe ir en minúsculas, sin espacios (por ejemplo bbva)." }, 400);
 
+  // palabras extra que el robot también vigila (las mismas reglas que la página: no se confía en lo que llega)
+  const COMUNES = ["banco", "bank", "pago", "pagos", "seguro", "segura", "login", "cuenta", "cuentas", "online", "mexico",
+    "soporte", "ayuda", "verifica", "acceso", "clientes", "token", "secure", "account", "support", "update", "wallet",
+    "servicio", "empresa", "empresas", "credito", "tarjeta", "card", "correo", "movil", "banca", "digital", "financiera"];
+  const extra = Array.isArray(d.palabras) ? [...new Set(d.palabras.map((p: unknown) => String(p).trim().toLowerCase()))] : [];
+  if (extra.length > 5 || extra.some((p) => !/^[a-z0-9][a-z0-9-]{3,39}$/.test(p) || COMUNES.includes(p))) {
+    return respuesta({ error: "Revisa las palabras: máximo 5, de 4 letras o más y sin palabras comunes." }, 400);
+  }
+
   // 1. activar la solicitud: el disparador suma los dominios del banco y activa la cuenta si ya existía
   const a = await base(`/rest/v1/solicitudes?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ cliente_id: banco, estado: "activa" }) });
   if (!a.ok) return respuesta({ error: "No se pudo activar la solicitud: " + (await a.text()).slice(0, 200) }, 500);
-  const nombre = ((await (await base(`/rest/v1/clientes?id=eq.${banco}&select=nombre`)).json())[0] || {}).nombre || banco;
+  const cli = (await (await base(`/rest/v1/clientes?id=eq.${banco}&select=nombre,palabras`)).json())[0] || {};
+  const nombre = cli.nombre || banco;
+  let palabras: string[] = cli.palabras || [banco];
+  if (extra.length) {
+    palabras = [...new Set([...palabras, ...extra])];
+    await base(`/rest/v1/clientes?id=eq.${banco}`, { method: "PATCH", body: JSON.stringify({ palabras }) });
+  }
   const robot = await arrancarRobot();
 
   // 2. invitar al correo: Supabase le manda el enlace para crear su contraseña y entrar a su panel
   const inv = await base(`/auth/v1/invite?redirect_to=${encodeURIComponent(PANEL)}`, { method: "POST", body: JSON.stringify({ email: s.correo }) });
-  if (inv.ok) return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: "enviada", correo: s.correo, robot });
+  if (inv.ok) return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: "enviada", correo: s.correo, robot, palabras });
   const err = await inv.text();
   if (/already|exists|registered/i.test(err)) {
     const avisado = await avisarActivo(s.correo, nombre);
-    return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: avisado ? "ya_tenia_cuenta" : "ya_tenia_cuenta_sin_aviso", correo: s.correo, robot });
+    return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: avisado ? "ya_tenia_cuenta" : "ya_tenia_cuenta_sin_aviso", correo: s.correo, robot, palabras });
   }
   console.error("No se pudo invitar:", inv.status, err);
-  return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: "fallo", detalle: err.slice(0, 200), correo: s.correo, robot });
+  return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: "fallo", detalle: err.slice(0, 200), correo: s.correo, robot, palabras });
 });

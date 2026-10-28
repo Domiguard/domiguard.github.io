@@ -25,6 +25,24 @@
     var ya = clientes.filter(function (c) { return c.id === nombre; })[0];
     return ya ? ya.id : nombre;
   }
+  /* palabras extra que el robot también busca para este banco (reportes, dominios nuevos y combinaciones) */
+  var COMUNES = ["banco", "bank", "pago", "pagos", "seguro", "segura", "login", "cuenta", "cuentas", "online", "mexico",
+    "soporte", "ayuda", "verifica", "acceso", "clientes", "token", "secure", "account", "support", "update", "wallet",
+    "servicio", "empresa", "empresas", "credito", "tarjeta", "card", "correo", "movil", "banca", "digital", "financiera"];
+  function leerPalabras(t) {
+    var vistas = {}, res = [];
+    String(t || "").split(",").forEach(function (p) {
+      p = p.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "");
+      if (p && !vistas[p]) { vistas[p] = 1; res.push(p); }
+    });
+    if (res.length > 5) throw new Error("Máximo 5 palabras por banco.");
+    res.forEach(function (p) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(p)) throw new Error("«" + p + "»: usa solo letras, números o guiones.");
+      if (p.length < 4) throw new Error("«" + p + "»: cada palabra debe tener al menos 4 letras.");
+      if (COMUNES.indexOf(p) >= 0) throw new Error("«" + p + "» es muy común y traería alertas falsas.");
+    });
+    return res;
+  }
   function dato(dl, k, v) { dl.appendChild(el("dt", "", k)); var dd = el("dd", "", v); dl.appendChild(dd); return dd; }
 
   function mostrar(d) {
@@ -53,6 +71,18 @@
     f.appendChild(l); f.appendChild(i); f.appendChild(lista);
     f.appendChild(el("span", "tiny", "Uno existente (" + clientes.map(function (c) { return c.id; }).join(", ") + ") o uno nuevo en minúsculas, sin espacios."));
     form.appendChild(f);
+    var fp = el("div", "field"), lp = el("label", "", "Palabras que también debe vigilar (opcional)"), ip = el("input");
+    lp.htmlFor = "palabras"; ip.id = "palabras"; ip.type = "text"; ip.autocomplete = "off"; ip.spellcheck = false;
+    ip.placeholder = "Separadas por comas, por ejemplo: azteca, guardadito";
+    var yaVigila = el("span", "tiny");
+    function mostrarYa() {
+      var c = clientes.filter(function (x) { return x.id === i.value.trim().toLowerCase(); })[0];
+      yaVigila.textContent = c && c.palabras && c.palabras.length ? "Este banco ya vigila: " + c.palabras.join(", ") + ". Las nuevas se suman."
+        : "Además del nombre del banco. Evita palabras comunes como «banco» o «pago».";
+    }
+    i.addEventListener("input", mostrarYa); mostrarYa();
+    fp.appendChild(lp); fp.appendChild(ip); fp.appendChild(yaVigila);
+    form.appendChild(fp);
     var acciones = el("div", "acciones");
     var ok = el("button", "btn p", "Aceptar e invitar"); ok.type = "submit";
     var no = el("button", "btn s", "Descartar"); no.type = "button";
@@ -60,10 +90,13 @@
     var msg = el("p", "msg no"); msg.hidden = true; msg.setAttribute("role", "alert"); form.appendChild(msg);
     card.appendChild(form); caja.appendChild(card);
 
-    function ocupado(si) { ok.disabled = no.disabled = i.disabled = si; }
+    function ocupado(si) { ok.disabled = no.disabled = i.disabled = ip.disabled = si; }
     form.onsubmit = function (e) {
-      e.preventDefault(); msg.hidden = true; ocupado(true); ok.textContent = "Aceptando…";
-      llamar({ accion: "aceptar", cliente_id: i.value.trim().toLowerCase() }).then(function (r) {
+      e.preventDefault(); msg.hidden = true;
+      var palabras;
+      try { palabras = leerPalabras(ip.value); } catch (err) { msg.textContent = err.message; msg.hidden = false; ip.focus(); return; }
+      ocupado(true); ok.textContent = "Aceptando…";
+      llamar({ accion: "aceptar", cliente_id: i.value.trim().toLowerCase(), palabras: palabras }).then(function (r) {
         if (!r.ok) { msg.textContent = r.error || "No se pudo aceptar. Vuelve a intentarlo."; msg.hidden = false; ocupado(false); ok.textContent = "Aceptar e invitar"; return; }
         var texto = {
           enviada: "Le enviamos la invitación a " + r.correo + ". Al abrirla crea su contraseña y entra a su panel.",
@@ -75,6 +108,7 @@
         var c = el("div", "card contratar");
         c.appendChild(el("h3", "", "Solicitud aceptada · " + r.banco));
         c.appendChild(el("p", "msg " + (r.invitacion === "fallo" ? "no" : "ok"), texto));
+        if (r.palabras && r.palabras.length) c.appendChild(el("p", "tiny", "El robot vigila para este banco: " + r.palabras.join(", ") + "."));
         c.appendChild(el("p", "tiny", r.robot === "arrancado" ? "El robot ya empezó a revisar sus dominios: en unos 4 minutos aparecen sus primeras alertas."
                                                          : "Sus dominios se revisan en la próxima corrida del robot (normalmente en menos de 45 minutos)."));
         caja.appendChild(c);
