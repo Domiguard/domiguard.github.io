@@ -170,3 +170,21 @@ create policy "ver mi perfil" on perfiles for select to authenticated using (use
 --   values ('bbva', 'BBVA México', 'bbva', '{bbva}', '{bbva.mx,bbva.com}');
 -- insert into clientes_contacto (cliente_id, correo) values ('bbva', 'CORREO-DE-SEGURIDAD-DEL-CLIENTE');
 
+
+-- Aviso al instante al equipo por cada solicitud nueva: el disparador llama a la Edge Function avisar-solicitud
+-- (supabase/functions/avisar-solicitud), que manda el correo por Gmail y marca notificada_en.
+-- Requiere la integración Database Webhooks (extensión pg_net). Va con la llave PÚBLICA: la función no confía en lo
+-- que recibe, solo lee de la base las solicitudes sin avisar. Secretos de la función: SMTP_USER, SMTP_PASS, AVISOS_CORREO.
+alter table solicitudes add column if not exists notificada_en timestamptz;
+create or replace function public.avisar_solicitud() returns trigger
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform net.http_post(
+    url := 'https://lrjlrznvhdoiciwitthf.supabase.co/functions/v1/avisar-solicitud',
+    body := jsonb_build_object('solicitud', new.id),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'apikey', 'sb_publishable_xLrZz35uDZuv7LHJVM8n_w_osM6pRSa'),
+    timeout_milliseconds := 10000);
+  return new;
+end $$;
+drop trigger if exists al_crear_solicitud on solicitudes;
+create trigger al_crear_solicitud after insert on solicitudes for each row execute function public.avisar_solicitud();
