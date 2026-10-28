@@ -99,6 +99,7 @@ nav a.btn-nav:hover{background:var(--n6)}
 .o-icono{height:24px;width:24px}
 .o-marcas li:nth-child(2) .o-chip{animation-delay:-1s}.o-marcas li:nth-child(3) .o-chip{animation-delay:-2s}.o-marcas li:nth-child(4) .o-chip{animation-delay:-3s}.o-marcas li:nth-child(5) .o-chip{animation-delay:-4s}.o-marcas li:nth-child(6) .o-chip{animation-delay:-5s}
 @keyframes flota{0%,100%{translate:0 0}50%{translate:0 -6px}}
+.orbita.chica{--R:min(300px,40vw);height:calc(var(--R) + 20px);margin-top:28px}
 .o-nota{margin:10px auto 0;text-align:center;font-size:13px;color:var(--mute)}
 .escena{position:relative;margin-top:44px;padding-bottom:72px}
 .escena::before{content:"";position:absolute;left:50%;top:8%;width:min(92%,980px);height:70%;transform:translateX(-50%);z-index:-1;border-radius:50%;
