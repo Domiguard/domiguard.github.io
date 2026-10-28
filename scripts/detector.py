@@ -145,24 +145,25 @@ def coincidencia(host, marca_fuente, cliente):
 
 def prioridad(coin, puntaje, en_fuente, resuelve, edad_dias=None):
     """alta / media / baja. Reglas simples y explicables:
-    Con reporte externo (camino A):
+    Con reporte externo (camino A): la edad no importa, porque también se hackean sitios viejos.
       alta   el modelo da 70 o más, o se parece al oficial / usa la marca y el modelo da 55 o más.
       media  el resto.
-    Sin reporte, la variante solo existe en DNS (camino B):
-      alta   se parece al oficial (o es otra terminación), existe y se registró hace 60 días o menos.
-      media  usa la marca y se registró hace 60 días o menos.
-      baja   sin esas señales: puede ser una compra defensiva del banco o un dominio ajeno de años."""
-    parecido = coin["tipo"] in ("parecido", "otra_terminacion")
+    Sin reporte (variantes y dominios recién registrados): manda la antigüedad del dominio. El banco no registra
+    hoy un dominio parecido al suyo; un estafador sí, lo usa unos días y lo abandona.
+      alta   registrado hace 30 días o menos (los recién registrados del camino C tienen 10 o menos).
+      media  registrado hace 31 días a 1 año.
+      baja   más de 1 año (suele ser del propio banco o de otro negocio) o sin fecha conocida (p. ej. .mx)."""
     if en_fuente:
         if puntaje >= 70:
             return "alta"
         if coin["tipo"] in ("parecido", "marca_en_dominio", "otra_terminacion") and puntaje >= 55:
             return "alta"
         return "media"
-    reciente = edad_dias is not None and edad_dias <= 60
-    if parecido and resuelve and reciente:
+    if edad_dias is None:
+        return "baja"
+    if edad_dias <= 30:
         return "alta"
-    if reciente:
+    if edad_dias <= 365:
         return "media"
     return "baja"
 

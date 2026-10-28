@@ -16,6 +16,15 @@
   var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
   function fmtDay(d) { var p = String(d).slice(0, 10).split("-"); return Number(p[2]) + " " + MESES[Number(p[1]) - 1]; }
+  /* antigüedad del dominio: lo que más pesa en la prioridad de variantes y dominios nuevos */
+  function antiguedad(a) {
+    var r = String((a.evidencia || {}).registrado || "");
+    if (!/^\d{4}-\d{2}-\d{2}/.test(r)) return a.canal === "nuevo_registro" ? "Registrado en los últimos 10 días" : "Sin fecha de registro";
+    var dias = Math.max(0, Math.round((Date.now() - new Date(r.slice(0, 10) + "T12:00:00Z")) / 864e5));
+    if (dias > 365) return "Dominio antiguo (desde " + r.slice(0, 4) + ")";
+    if (dias >= 60) return "Registrado hace " + Math.round(dias / 30) + " meses";
+    return "Registrado hace " + (dias === 0 ? "menos de un día" : dias === 1 ? "1 día" : dias + " días");
+  }
   function defang(a) { return (a.tls ? "hxxps://" : "hxxp://") + String(a.host || "").replace(/\./g, "[.]"); }
   function ultimoDia() {
     if (S.estado && S.estado.dia) return S.estado.dia;
@@ -33,7 +42,7 @@
     var c = clienteActual(); if (!c) return;
     var box = $("m-dominios"); box.textContent = "";
     (c.dominios || []).forEach(function (d) { var s = el("span", "tag mono", d); box.appendChild(s); });
-    $("m-vigiladas").textContent = c.variantes_vigiladas ? "Cada 5 minutos revisamos " + nf(c.variantes_vigiladas) + " variantes de estos dominios (letras cambiadas, guiones, otras terminaciones)." : "";
+    $("m-vigiladas").textContent = c.variantes_vigiladas ? "Más o menos cada 10 minutos revisamos " + nf(c.variantes_vigiladas) + " variantes de estos dominios (letras cambiadas, guiones, otras terminaciones)." : "";
   }
   function renderKpis() {
     var mias = delCliente(), L = ultimoDia();
@@ -72,7 +81,7 @@
     art.appendChild(top);
     art.appendChild(el("div", "", a.motivo || ""));
     var meta = el("div", "al-meta");
-    [ "Puntaje " + a.puntaje, a.pais || null, "Detectado el " + fmtDay(a.creada_en), "Estado: " + (ESTADOS[a.estado] || a.estado),
+    [ antiguedad(a), "Puntaje " + a.puntaje, a.pais || null, "Detectado el " + fmtDay(a.creada_en), "Estado: " + (ESTADOS[a.estado] || a.estado),
       a.dns_ok === false ? "El sitio ya no responde" : null ].forEach(function (t) { if (t) meta.appendChild(el("span", "", t)); });
     art.appendChild(meta);
 

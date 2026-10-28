@@ -7,7 +7,21 @@ on:
     # Corrida completa cada hora al minuto 15 (incluye las 5:15 am de Mérida, 11:15 UTC):
     # también reportes públicos y revisión de alertas abiertas.
     - cron: "15 * * * *"
-  workflow_dispatch: {}         # permite correrlo a mano desde la pestaña Actions (corrida completa)
+  # A mano (pestaña Actions), al aceptar una solicitud (corrida completa) y al final de cada corrida, que deja
+  # programada la siguiente unos 10 minutos después (modo "auto": completa si la última completa fue hace una hora
+  # o más; si no, rápida). Así no depende solo del horario de GitHub, que en la práctica se retrasa mucho.
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "completa o auto"
+        type: choice
+        options: [completa, auto]
+        default: completa
+
+# Para que cada corrida pueda dejar programada la siguiente
+permissions:
+  actions: write
+  contents: read
 
 # Nunca dos corridas al mismo tiempo: si una tarda, la siguiente espera.
 concurrency:
@@ -19,6 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Anotar la hora de inicio
+        run: echo "INICIO=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
@@ -38,9 +54,22 @@ jobs:
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           EVENTO: ${{ github.event_name }}
           HORARIO: ${{ github.event.schedule }}
+          MODO: ${{ inputs.modo }}
         run: |
+          rapida=no
           if [ "$EVENTO" = "schedule" ] && [ "$HORARIO" != "15 * * * *" ]; then
-            python scripts/actualizar.py --rapida
-          else
-            python scripts/actualizar.py
+            rapida=si
+          elif [ "$EVENTO" = "workflow_dispatch" ] && [ "$MODO" = "auto" ]; then
+            # completa si la última completa fue hace 55 minutos o más (o no se puede saber)
+            rapida=$(python scripts/modo_auto.py)
           fi
+          echo "Corrida rápida: $rapida"
+          if [ "$rapida" = "si" ]; then python scripts/actualizar.py --rapida; else python scripts/actualizar.py; fi
+      - name: Dejar programada la siguiente búsqueda (unos 10 minutos después del inicio de esta)
+        if: always() && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          espera=$(( 600 - ( $(date +%s) - INICIO ) ))
+          if [ "$espera" -gt 0 ]; then echo "Esperando $espera segundos"; sleep "$espera"; fi
+          gh workflow run diario.yml --repo "${{ github.repository }}" --ref main -f modo=auto
