@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
 <meta name="theme-color" content="#06141B">
-<link rel="stylesheet" href="styles.css?v=navy-1">
+<link rel="stylesheet" href="styles.css?v=navy-2">
 </head>
 <body>
 <a class="skip" href="#panel">Saltar al contenido</a>
@@ -47,10 +47,10 @@
 
   <div class="grid" id="m-kpis" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))"></div>
 
-  <div class="card">
+  <div class="card con-descarga">
+    <button type="button" class="descargar-ico" id="m-excel" disabled aria-label="Descargar Excel" title="Descargar Excel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M4.5 15v3a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-3"/></svg></button>
     <div class="chips" role="group" aria-label="Filtro de alertas" id="m-chips"></div>
     <div class="chips" role="group" aria-label="Filtro por canal" id="m-canales" hidden></div>
-    <div class="descarga"><button type="button" class="more principal" id="m-excel" disabled>Descargar Excel</button><button type="button" class="more" id="m-csv" disabled>CSV</button><span class="tiny" id="m-csv-nota">Se descargan las alertas que ves con los filtros de arriba, con su evidencia completa.</span></div>
     <div id="m-list" class="alerts"></div>
     <div class="empty" id="m-empty" hidden>No hay alertas con este filtro.</div>
     <p class="note">Las direcciones se muestran con puntos entre corchetes y sin enlace, para que nadie entre por accidente. El puntaje es la probabilidad de phishing que calcula el modelo de Domiguard, de 0 a 100.</p>
@@ -72,6 +72,6 @@
 <script src="config.js"></script>
 <script src="sesion.js?v=menu-1"></script>
 <script src="excel.js?v=excel-1"></script>
-<script src="app.js?v=excel-1"></script>
+<script src="app.js?v=navy-2"></script>
 </body>
 </html>

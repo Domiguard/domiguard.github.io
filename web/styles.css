@@ -96,7 +96,6 @@ nav a.btn-nav:hover{background:var(--n6)}
 .v-fila .mono{font-size:13px;color:var(--n5);font-weight:600}
 .v-fila .tiny{grid-column:2/4}
 .v-fila .pill{justify-self:start}
-.v-fila.alta{box-shadow:inset 3px 0 0 var(--bar-hi)}.v-fila.media{box-shadow:inset 3px 0 0 var(--bar-mid)}.v-fila.baja{box-shadow:inset 3px 0 0 var(--bar-lo)}
 .v-nota{font-size:12px;color:var(--mute);padding:0 18px 14px}
 
 /* cifras en vivo (salen de la última revisión del robot) */
@@ -209,9 +208,6 @@ select option{color:var(--n5);background:var(--n1)}
 /* alertas */
 .alerts{display:flex;flex-direction:column;gap:12px}
 .al{border:1px solid var(--line);border-radius:18px;padding:16px 20px;background:rgba(17,33,45,.78);display:flex;flex-direction:column;gap:6px}
-.al.alta{box-shadow:inset 3px 0 0 var(--bar-hi)}
-.al.media{box-shadow:inset 3px 0 0 var(--bar-mid)}
-.al.baja{box-shadow:inset 3px 0 0 var(--bar-lo)}
 .al-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding-left:6px}
 .al-top .mono{flex:1 1 260px;min-width:0;font-weight:600;color:var(--n6)}
 .al>div,.al>details{padding-left:6px}
@@ -268,10 +264,13 @@ select option{color:var(--n5);background:var(--n1)}
 .sesion-barra:empty{display:none}
 .salir{border:1px solid var(--line2);background:rgba(17,33,45,.6);color:var(--n5);border-radius:999px;padding:6px 14px;font:600 13px var(--f-body);cursor:pointer;min-height:36px}
 .salir:hover{border-color:var(--n4)}
-.descarga{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0 0 14px}
-.descarga .more{margin:0}
-.descarga .more:disabled{opacity:.5;cursor:default}
-.descarga .more.principal{background:var(--n5);color:var(--n0);border-color:var(--n5)}
+/* panel: descarga en Excel con un icono, arriba a la derecha de los filtros */
+.con-descarga{position:relative;padding-right:84px}
+.descargar-ico{position:absolute;top:18px;right:18px;width:46px;height:46px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--line2);border-radius:14px;background:rgba(17,33,45,.6);color:var(--n5);cursor:pointer;transition:border-color .2s,background .2s}
+.descargar-ico:hover{border-color:var(--n4);background:rgba(37,55,69,.6)}
+.descargar-ico:disabled{opacity:.4;cursor:default}
+.descargar-ico svg{width:22px;height:22px}
 
 /* tendencias: gráficas. Colores revisados contra la superficie #11212D (contraste 3:1 o más) */
 :root{

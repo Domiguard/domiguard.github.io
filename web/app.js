@@ -114,7 +114,7 @@
     }).sort(function (x, y) { return ORDEN[x.prioridad] - ORDEN[y.prioridad] || y.puntaje - x.puntaje; });
     S.visibles = rows;
     var xl = $("m-excel"), csv = $("m-csv");
-    if (xl) { xl.disabled = !rows.length; xl.textContent = "Descargar Excel (" + nf(rows.length) + (rows.length === 1 ? " alerta)" : " alertas)"); }
+    if (xl) { xl.disabled = !rows.length; xl.title = "Descargar Excel (" + nf(rows.length) + (rows.length === 1 ? " alerta)" : " alertas)"); xl.setAttribute("aria-label", xl.title); }
     if (csv) csv.disabled = !rows.length;
     var box = $("m-list"); box.textContent = ""; $("m-empty").hidden = rows.length > 0;
     $("m-empty").textContent = delCliente().length ? "No hay alertas con este filtro." : "Sin alertas por ahora. Seguimos vigilando tus dominios todos los días.";
