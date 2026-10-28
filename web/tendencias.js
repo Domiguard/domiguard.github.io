@@ -181,6 +181,12 @@
     var kp = [[nf(al.length), "alertas guardadas"], [nf(altas), "de prioridad alta"],
       [nf(al.filter(function (a) { return a.creada_en >= sumaDias(hoy, -6); }).length), "en los últimos 7 días"],
       [con.length ? Math.round(100 * recientes / con.length) + "%" : "–", "con dominio de 30 días o menos (de las que tienen fecha)"]];
+    /* días desde la detección hasta que el cliente la marcó como dada de baja */
+    var bajas = al.filter(function (a) { return a.dada_de_baja_en; }).map(function (a) {
+      return Math.max(0, (new Date(a.dada_de_baja_en) - new Date(a.detectada_en || a.creada_en + "T12:00:00Z")) / 864e5);
+    });
+    kp.push([bajas.length ? (bajas.reduce(function (x, y) { return x + y; }, 0) / bajas.length).toFixed(1) : "–",
+             bajas.length ? "días promedio hasta la baja (" + nf(bajas.length) + (bajas.length === 1 ? " sitio)" : " sitios)") : "días promedio hasta la baja (todavía ninguna marcada)"]);
     var box = $("t-kpis"); box.textContent = "";
     kp.forEach(function (k) { var c = el("div", "card kpi"); c.appendChild(el("div", "v", k[0])); c.appendChild(el("div", "l", k[1])); box.appendChild(c); });
 
@@ -210,6 +216,11 @@
       else cub["Sin dato"]++;
     });
     var uno = [{ k: "total", l: "Alertas", c: "--viz-1" }];
+    /* estado que marcó el cliente */
+    var NOMBRE_ESTADO = { nueva: "Nueva", enviada: "Avisada", en_baja: "Pedí la baja", dada_de_baja: "Dada de baja", falsa_alarma: "Falsa alarma" };
+    var est = {}; al.forEach(function (a) { var k = NOMBRE_ESTADO[a.estado] || a.estado || "Nueva"; est[k] = (est[k] || 0) + 1; });
+    if ($("g-estado")) barras($("g-estado"), ["Nueva", "Avisada", "Pedí la baja", "Dada de baja", "Falsa alarma"].filter(function (k) { return est[k]; })
+      .map(function (k) { return { l: k, v: { total: est[k] } }; }), uno, "Estado");
     barras($("g-edad"), Object.keys(cub).filter(function (k) { return cub[k]; }).map(function (k) { return { l: k, v: { total: cub[k] } }; }), uno, "Antigüedad");
 
     /* terminaciones y registradores */
@@ -250,7 +261,7 @@
       }
       return Promise.all([
         pagina("/clientes?select=id,nombre,destacado&activo=eq.true&id=eq." + cid, 0, []),
-        pagina("/alertas?select=cliente_id,canal,prioridad,creada_en,host,evidencia->registrado,evidencia->registrador&cliente_id=eq." + cid + "&order=creada_en", 0, []),
+        pagina("/alertas?select=cliente_id,canal,prioridad,creada_en,host,estado,detectada_en,dada_de_baja_en,evidencia->registrado,evidencia->registrador&cliente_id=eq." + cid + "&order=creada_en", 0, []),
         fetch(base + "/estado?id=eq.ultima&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; })
       ]);
     }).then(function (res) {

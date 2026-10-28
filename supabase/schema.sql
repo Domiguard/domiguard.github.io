@@ -219,3 +219,33 @@ begin
 end $$;
 drop trigger if exists al_guardar_variante on variantes;
 create trigger al_guardar_variante before insert or update on variantes for each row execute function public.marcar_existe_desde();
+
+-- Estado de cada alerta marcado por el cliente desde su panel: «Pedí la baja», «Ya la dieron de baja», «Falsa alarma»
+-- o «Volver a nueva». Solo con esta función (no hay permiso de UPDATE directo): comprueba que la cuenta esté aprobada
+-- y que la alerta sea de SU banco, y cambia solo el estado y sus fechas. Las fechas alimentan «días hasta la baja».
+alter table alertas add column if not exists baja_pedida_en  timestamptz;
+alter table alertas add column if not exists dada_de_baja_en timestamptz;
+alter table alertas add column if not exists estado_cambiado_por uuid;
+create or replace function public.marcar_alerta(p_id text, p_estado text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare banco text; fila alertas;
+begin
+  if p_estado not in ('nueva', 'en_baja', 'dada_de_baja', 'falsa_alarma') then
+    raise exception 'Estado no válido';
+  end if;
+  select cliente_id into banco from perfiles where user_id = auth.uid() and aprobado and cliente_id is not null;
+  if banco is null then raise exception 'Tu cuenta no tiene un plan activo'; end if;
+  update alertas set
+    estado = p_estado,
+    baja_pedida_en = case when p_estado = 'nueva' then null
+                          when p_estado in ('en_baja', 'dada_de_baja') then coalesce(baja_pedida_en, now())
+                          else baja_pedida_en end,
+    dada_de_baja_en = case when p_estado = 'dada_de_baja' then coalesce(dada_de_baja_en, now()) else null end,
+    estado_cambiado_por = auth.uid()
+  where id = p_id and cliente_id = banco
+  returning * into fila;
+  if not found then raise exception 'Alerta no encontrada'; end if;
+  return jsonb_build_object('id', fila.id, 'estado', fila.estado, 'baja_pedida_en', fila.baja_pedida_en, 'dada_de_baja_en', fila.dada_de_baja_en);
+end $$;
+revoke all on function public.marcar_alerta(text, text) from public, anon;
+grant execute on function public.marcar_alerta(text, text) to authenticated;

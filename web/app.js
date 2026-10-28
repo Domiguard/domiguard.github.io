@@ -55,7 +55,7 @@
     var box = $("m-chips"); box.textContent = "";
     defs.forEach(function (d) {
       var b = el("button", "chip", d[1] + " (" + d[2] + ")"); b.type = "button"; b.setAttribute("aria-pressed", String(S.filtro === d[0]));
-      b.onclick = function () { S.filtro = d[0]; renderChips(); renderLista(); }; box.appendChild(b);
+      b.onclick = function () { S.filtro = d[0]; avisoLista(""); renderChips(); renderLista(); }; box.appendChild(b);
     });
   }
   function fila(d, k, v) { var dt = el("dt", "", k), dd = el("dd", "", v); d.appendChild(dt); d.appendChild(dd); }
@@ -89,8 +89,64 @@
     if (e.correo_abuso) fila(dl, "Correo de abuso", e.correo_abuso);
     if (a.asn) fila(dl, "ASN", a.asn);
     a1.appendChild(dl); ev.appendChild(a1);
-    det.appendChild(ev); art.appendChild(det);
+    det.appendChild(ev);
+    det.appendChild(acciones(a));
+    if (S.abierta === a.id) det.open = true;
+    art.appendChild(det);
     return art;
+  }
+
+  /* ---------- el cliente marca el estado de la alerta (función marcar_alerta de la base: solo su banco) ---------- */
+  var BOTONES = [["en_baja", "Pedí la baja"], ["dada_de_baja", "Ya la dieron de baja"], ["falsa_alarma", "Falsa alarma"], ["nueva", "Volver a nueva"]];
+  function acciones(a) {
+    var caja = el("div", "marcar"), fila = el("div", "acciones");
+    caja.appendChild(el("h4", "", "¿Qué hiciste con este sitio?"));
+    var aviso = el("p", "tiny"); aviso.setAttribute("role", "status");
+    BOTONES.forEach(function (b) {
+      if (b[0] === "nueva" && a.estado === "nueva") return;
+      var btn = el("button", "chip", b[1]); btn.type = "button"; btn.setAttribute("aria-pressed", String(a.estado === b[0]));
+      btn.onclick = function () {
+        if (a.estado === b[0]) return;
+        fila.querySelectorAll("button").forEach(function (x) { x.disabled = true; }); aviso.textContent = "Guardando…";
+        marcar(a, b[0]).then(function () {
+          S.abierta = a.id; renderKpis(); renderChips(); renderCanales(); renderLista();
+          // si con el filtro actual la alerta ya no se ve, se avisa a dónde pasó
+          var sigue = (S.visibles || []).some(function (x) { return x.id === a.id; });
+          avisoLista(sigue ? "" : "Guardado: " + a.host.replace(/\./g, "[.]") + " pasó a «" + (ABIERTA[a.estado] ? "Abiertas" : "Cerradas") + "».");
+        })
+          .catch(function (e) { aviso.textContent = e.message; fila.querySelectorAll("button").forEach(function (x) { x.disabled = false; }); });
+      };
+      fila.appendChild(btn);
+    });
+    caja.appendChild(fila); caja.appendChild(aviso);
+    if (a.dada_de_baja_en) caja.appendChild(el("p", "tiny", "Dada de baja el " + fmtDay(a.dada_de_baja_en) + "."));
+    else if (a.baja_pedida_en && a.estado === "en_baja") caja.appendChild(el("p", "tiny", "Pediste la baja el " + fmtDay(a.baja_pedida_en) + "."));
+    return caja;
+  }
+  function avisoLista(texto) {
+    var n = $("m-aviso");
+    if (!n) { n = el("p", "msg ok"); n.id = "m-aviso"; n.setAttribute("role", "status"); $("m-list").parentNode.insertBefore(n, $("m-list")); }
+    n.textContent = texto; n.hidden = !texto;
+  }
+  function marcar(a, estado) {
+    var cfg = window.DOMIGUARD_CONFIG || {};
+    if (!cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL)) {          // demostración: solo en esta pantalla
+      var ahora = new Date().toISOString();
+      a.estado = estado;
+      a.baja_pedida_en = estado === "nueva" ? null : (estado === "en_baja" || estado === "dada_de_baja") ? (a.baja_pedida_en || ahora) : a.baja_pedida_en;
+      a.dada_de_baja_en = estado === "dada_de_baja" ? (a.dada_de_baja_en || ahora) : null;
+      return Promise.resolve();
+    }
+    return window.DomiguardSesion.encabezados().then(function (h) {
+      return fetch(cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/rpc/marcar_alerta", {
+        method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, h), body: JSON.stringify({ p_id: a.id, p_estado: estado })
+      });
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (!r.ok) throw new Error(/plan activo/.test(d.message || "") ? "Tu cuenta no tiene un plan activo." : "No se pudo guardar. Vuelve a intentarlo.");
+        a.estado = d.estado; a.baja_pedida_en = d.baja_pedida_en; a.dada_de_baja_en = d.dada_de_baja_en;
+      });
+    });
   }
   function renderCanales() {
     var box = $("m-canales"); if (!box) return;
