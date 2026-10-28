@@ -75,6 +75,31 @@ nav a.btn-nav:hover{background:var(--n6)}
 .hero h1{font-size:68px;line-height:1.02;letter-spacing:-.025em;max-width:15ch;margin-inline:auto}
 .hero .tx>p{margin:0 auto;font-size:19px;color:var(--n4);max-width:56ch}
 .hero .btns{justify-content:center;margin-top:6px}
+/* semicírculo de marcas vigiladas alrededor del escudo (posición con cos/sin del ángulo --a y el radio --r) */
+.orbita{--R:min(460px,44vw);position:relative;height:calc(var(--R) + 40px);margin:12px auto 0;width:100%;max-width:1040px;overflow:hidden;
+  mask-image:linear-gradient(180deg,#000 90%,transparent);-webkit-mask-image:linear-gradient(180deg,#000 90%,transparent)}
+.o-anillos i{position:absolute;left:50%;bottom:0;width:calc(var(--R)*2*var(--k) + 40px);aspect-ratio:1;border-radius:50%;
+  border:1px solid rgba(155,168,171,.16);transform:translate(-50%,50%);transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+.o-anillos i:nth-child(odd){border-style:dashed;border-color:rgba(155,168,171,.11)}
+.o-centro{position:absolute;left:50%;bottom:-40px;width:170px;height:170px;transform:translateX(-50%);border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(closest-side,rgba(155,168,171,.30),rgba(37,55,69,.25) 60%,transparent);}
+.o-centro img{width:72px;height:auto;margin-bottom:56px;filter:drop-shadow(0 8px 24px rgba(204,208,207,.35))}
+.o-marcas{list-style:none;margin:0;padding:0}
+.o-marcas li{position:absolute;left:50%;bottom:0;
+  transform:translate(-50%,50%) translate(calc(cos(var(--a))*var(--R)*var(--r)),calc(sin(var(--a))*var(--R)*var(--r)*-1)) translate(var(--mx,0px),var(--my,0px));
+  transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+.o-chip{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:58px;min-width:58px;padding:0 20px;border-radius:999px;
+  background:linear-gradient(180deg,#F3F5F4,#DADFDD);border:1px solid rgba(255,255,255,.7);
+  box-shadow:0 16px 34px -14px rgba(0,0,0,.75),inset 0 1px 0 #fff;cursor:default;
+  animation:flota 6s ease-in-out infinite;
+  transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s}
+.o-chip:hover{transform:translateY(-6px) scale(1.08);box-shadow:0 22px 44px -16px rgba(0,0,0,.8),0 0 0 6px rgba(204,208,207,.14),inset 0 1px 0 #fff;animation-play-state:paused}
+.o-chip b{font:700 16px var(--f-body);letter-spacing:-.01em}
+.o-ancho{height:22px;width:auto;max-width:120px}
+.o-icono{height:24px;width:24px}
+.o-marcas li:nth-child(2) .o-chip{animation-delay:-1s}.o-marcas li:nth-child(3) .o-chip{animation-delay:-2s}.o-marcas li:nth-child(4) .o-chip{animation-delay:-3s}.o-marcas li:nth-child(5) .o-chip{animation-delay:-4s}.o-marcas li:nth-child(6) .o-chip{animation-delay:-5s}
+@keyframes flota{0%,100%{translate:0 0}50%{translate:0 -6px}}
+.o-nota{margin:10px auto 0;text-align:center;font-size:13px;color:var(--mute)}
 .escena{position:relative;margin-top:44px;padding-bottom:72px}
 .escena::before{content:"";position:absolute;left:50%;top:8%;width:min(92%,980px);height:70%;transform:translateX(-50%);z-index:-1;border-radius:50%;
   background:radial-gradient(closest-side,rgba(155,168,171,.42),rgba(74,92,106,.25) 55%,transparent);filter:blur(40px)}
@@ -325,6 +350,20 @@ select option{color:var(--n5);background:var(--n1)}
   .v-lado{flex-direction:row;border-right:0;border-bottom:1px solid var(--line);padding:10px 14px}
 }
 @media (max-width:560px){
+  .orbita{--R:37vw;margin-top:16px;height:calc(var(--R) + 56px)}
+  /* en celular: 3 marcas afuera y 3 adentro para que no se encimen */
+  .o-marcas li:nth-child(1){--a:145deg !important;--r:1 !important}
+  .o-marcas li:nth-child(2){--a:90deg !important;--r:1.08 !important}
+  .o-marcas li:nth-child(4){--a:35deg !important;--r:1 !important}
+  .o-marcas li:nth-child(5){--a:166deg !important;--r:.56 !important}
+  .o-marcas li:nth-child(3){--a:90deg !important;--r:.74 !important}
+  .o-marcas li:nth-child(6){--a:14deg !important;--r:.56 !important}
+  .o-chip{height:36px;min-width:36px;padding:0 10px;gap:5px}
+  .o-chip b{font-size:12px}
+  .o-ancho{height:13px;max-width:66px}
+  .o-icono{height:16px;width:16px}
+  .o-centro{width:120px;height:120px;bottom:-30px}
+  .o-centro img{width:48px;margin-bottom:40px}
   .hero .wrap{padding-block:56px 0}
   .hero h1{font-size:42px}
   .hero .tx>p{font-size:17px}
@@ -339,7 +378,7 @@ select option{color:var(--n5);background:var(--n1)}
   .barra i{grid-column:1/3;order:2}
   .cifras b{font-size:34px}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none !important;scroll-behavior:auto !important}}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;scroll-behavior:auto !important}.o-chip{animation:none}}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   nav{background:var(--n0)}
 }

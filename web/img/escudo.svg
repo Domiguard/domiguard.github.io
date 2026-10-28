@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 144" role="img" aria-label="Domiguard">
+  <path d="M60 0 C82 10 102 16 120 18 V70 C120 108 94 132 60 144 C26 132 0 108 0 70 V18 C18 16 38 10 60 0 Z" fill="#CCD0CF"/>
+  <rect x="19" y="46" width="82" height="24" rx="12" fill="#06141B"/>
+  <path d="M30 58 l7 7 l13 -13" fill="none" stroke="#CCD0CF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="58" y="55.5" width="32" height="5" rx="2.5" fill="#CCD0CF"/>
+  <rect x="30" y="85" width="60" height="5" rx="2.5" fill="#4A5C6A"/>
+  <rect x="38" y="99" width="44" height="5" rx="2.5" fill="#9BA8AB"/>
+</svg>
