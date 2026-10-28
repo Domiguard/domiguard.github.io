@@ -3,7 +3,9 @@
 // HMAC del id de la solicitud con la llave de servicio, así que nadie puede fabricar un enlace válido.
 // Aceptar: pone el banco (cliente_id) y estado 'activa' (el disparador activar_solicitud suma sus dominios y activa
 // la cuenta si ya existía) y después invita al correo con Supabase Auth; si la cuenta ya existía, le avisa por correo.
-// Secretos: los mismos de avisar-solicitud (SMTP_USER, SMTP_PASS), para el aviso a una cuenta que ya existía.
+// Secretos: los mismos de avisar-solicitud (SMTP_USER, SMTP_PASS), para el aviso a una cuenta que ya existía, y
+// GITHUB_ROBOT_TOKEN (opcional): llave de GitHub que solo puede correr el robot; con ella, al aceptar se arranca una
+// corrida al instante para que los dominios nuevos se revisen sin esperar el turno de GitHub.
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const URL_BASE = Deno.env.get("SUPABASE_URL")!;
@@ -62,6 +64,21 @@ async function avisarActivo(correo: string, banco: string) {
   }
 }
 
+// Arranca el robot (workflow diario.yml, corrida completa). Devuelve "arrancado", "sin_llave" o "fallo".
+async function arrancarRobot() {
+  const llave = (Deno.env.get("GITHUB_ROBOT_TOKEN") || "").trim();
+  if (!llave) return "sin_llave";
+  const r = await fetch("https://api.github.com/repos/Domiguard/domiguard.github.io/actions/workflows/diario.yml/dispatches", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${llave}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
+               "User-Agent": "domiguard-aceptar", "Content-Type": "application/json" },
+    body: JSON.stringify({ ref: "main" }),
+  }).catch((e) => { console.error("No se pudo arrancar el robot:", e); return null; });
+  if (r && r.status === 204) return "arrancado";
+  if (r) console.error("No se pudo arrancar el robot:", r.status, (await r.text()).slice(0, 200));
+  return "fallo";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return respuesta({ error: "Método no permitido" }, 405);
@@ -96,15 +113,16 @@ Deno.serve(async (req) => {
   const a = await base(`/rest/v1/solicitudes?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ cliente_id: banco, estado: "activa" }) });
   if (!a.ok) return respuesta({ error: "No se pudo activar la solicitud: " + (await a.text()).slice(0, 200) }, 500);
   const nombre = ((await (await base(`/rest/v1/clientes?id=eq.${banco}&select=nombre`)).json())[0] || {}).nombre || banco;
+  const robot = await arrancarRobot();
 
   // 2. invitar al correo: Supabase le manda el enlace para crear su contraseña y entrar a su panel
   const inv = await base(`/auth/v1/invite?redirect_to=${encodeURIComponent(PANEL)}`, { method: "POST", body: JSON.stringify({ email: s.correo }) });
-  if (inv.ok) return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: "enviada", correo: s.correo });
+  if (inv.ok) return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: "enviada", correo: s.correo, robot });
   const err = await inv.text();
   if (/already|exists|registered/i.test(err)) {
     const avisado = await avisarActivo(s.correo, nombre);
-    return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: avisado ? "ya_tenia_cuenta" : "ya_tenia_cuenta_sin_aviso", correo: s.correo });
+    return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: avisado ? "ya_tenia_cuenta" : "ya_tenia_cuenta_sin_aviso", correo: s.correo, robot });
   }
   console.error("No se pudo invitar:", inv.status, err);
-  return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: "fallo", detalle: err.slice(0, 200), correo: s.correo });
+  return respuesta({ ok: true, estado: "activa", banco: nombre, invitacion: "fallo", detalle: err.slice(0, 200), correo: s.correo, robot });
 });

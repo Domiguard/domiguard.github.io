@@ -75,6 +75,8 @@
         var c = el("div", "card contratar");
         c.appendChild(el("h3", "", "Solicitud aceptada · " + r.banco));
         c.appendChild(el("p", "msg " + (r.invitacion === "fallo" ? "no" : "ok"), texto));
+        c.appendChild(el("p", "tiny", r.robot === "arrancado" ? "El robot ya empezó a revisar sus dominios: en unos 4 minutos aparecen sus primeras alertas."
+                                                         : "Sus dominios se revisan en la próxima corrida del robot (normalmente en menos de 45 minutos)."));
         caja.appendChild(c);
       }).catch(function () { msg.textContent = "No se pudo conectar. Revisa tu internet y vuelve a intentarlo."; msg.hidden = false; ocupado(false); ok.textContent = "Aceptar e invitar"; });
     };
