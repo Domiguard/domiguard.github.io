@@ -1,0 +1,5 @@
+# Domiguard: Google puede leer todo el sitio. Las páginas privadas (aceptar.html, 404.html) llevan su propia
+# etiqueta noindex; no se bloquean aquí para que Google pueda leer esa orden.
+User-agent: *
+Allow: /
+Sitemap: https://domiguard.github.io/sitemap.xml
