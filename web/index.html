@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" href="img/icono.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=navy-2">
+<link rel="stylesheet" href="styles.css?v=navy-3">
 </head>
 <body>
 <a class="skip" href="#como">Saltar al contenido</a>
@@ -36,13 +36,37 @@
     <div class="ventana" aria-label="Ejemplo del panel del cliente con detecciones reales">
       <div class="v-barra" aria-hidden="true"><i></i><i></i><i></i><span>Panel del cliente · BBVA México</span></div>
       <div class="v-cuerpo">
-        <div class="v-lado" aria-hidden="true"><b>Alertas</b><span>Tendencias</span><span>Descargar Excel</span></div>
-        <div class="v-main">
+        <div class="v-lado" role="tablist" aria-label="Secciones del panel">
+          <button type="button" role="tab" id="vt-alertas" aria-controls="vp-alertas" aria-selected="true">Alertas</button>
+          <button type="button" role="tab" id="vt-tendencias" aria-controls="vp-tendencias" aria-selected="false" tabindex="-1">Tendencias</button>
+        </div>
+        <div class="v-main" role="tabpanel" id="vp-alertas" aria-labelledby="vt-alertas">
           <div class="v-tit"><strong>Sitios que imitan a tu banco</strong><span class="tiny">Ordenados por prioridad</span></div>
           <div class="v-fila alta"><span class="pill p-hi">Alta</span><span class="mono">hxxp://bbvalues[.]uk</span><span class="tiny" style="grid-column:auto">26 oct</span><span class="tiny">Reporte externo: la fuente lo señala como suplantación de BBVA</span></div>
           <div class="v-fila alta"><span class="pill p-hi">Alta</span><span class="mono">hxxp://bbgva[.]com</span><span class="tiny" style="grid-column:auto">26 oct</span><span class="tiny">Variante de tu dominio: casi igual a bbva[.]mx, 1 carácter de diferencia</span></div>
           <div class="v-fila media"><span class="pill p-mid">Media</span><span class="mono">hxxp://bbva-netcash-empr-login[.]cc</span><span class="tiny" style="grid-column:auto">27 oct</span><span class="tiny">Dominio recién registrado que usa el nombre de la marca</span></div>
           <div class="v-fila baja"><span class="pill p-lo">Baja</span><span class="mono">hxxp://acceso-bbva[.]net</span><span class="tiny" style="grid-column:auto">27 oct</span><span class="tiny">Variante de tu dominio que usa el nombre de la marca</span></div>
+        </div>
+        <div class="v-main" role="tabpanel" id="vp-tendencias" aria-labelledby="vt-tendencias" hidden>
+          <div class="v-tit"><strong>Tendencias de tu banco</strong><span class="tiny">Todas las detecciones al 27 oct 2026</span></div>
+          <div class="v-kpis">
+            <div><b>115</b><span>alertas</span></div>
+            <div><b>2</b><span>prioridad alta</span></div>
+            <div><b>3</b><span>prioridad media</span></div>
+          </div>
+          <div class="v-graf">
+            <div class="v-bloque"><span class="v-sub">Cómo las encontramos</span>
+              <div class="barra"><span>Variantes de tu dominio</span><i style="width:100%"></i><b>111</b></div>
+              <div class="barra"><span>Reportes externos</span><i style="width:2.7%"></i><b>3</b></div>
+              <div class="barra"><span>Recién registrados</span><i style="width:1%"></i><b>1</b></div>
+            </div>
+            <div class="v-bloque"><span class="v-sub">Terminaciones más usadas</span>
+              <div class="barra"><span>[.]com</span><i style="width:100%"></i><b>81</b></div>
+              <div class="barra"><span>[.]mx</span><i style="width:29.6%"></i><b>24</b></div>
+              <div class="barra"><span>[.]net</span><i style="width:3.7%"></i><b>3</b></div>
+              <div class="barra"><span>Otras</span><i style="width:3.7%"></i><b>3</b></div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="v-nota">Detecciones reales tomadas de datos públicos. BBVA no es cliente de Domiguard ni tiene relación con el proyecto.</div>
@@ -161,6 +185,6 @@
 
 <script src="config.js"></script>
 <script src="sesion.js?v=invita-1"></script>
-<script src="inicio.js?v=navy-1"></script>
+<script src="inicio.js?v=navy-2"></script>
 </body>
 </html>

@@ -87,8 +87,20 @@ nav a.btn-nav:hover{background:var(--n6)}
 .v-barra span{margin-left:10px}
 .v-cuerpo{display:grid;grid-template-columns:200px 1fr;min-height:0}
 .v-lado{border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--n4)}
-.v-lado b{color:var(--n6);font-weight:600;padding:6px 10px;border-radius:10px;background:rgba(37,55,69,.6)}
-.v-lado span{padding:6px 10px}
+.v-lado button{all:unset;cursor:pointer;padding:7px 10px;border-radius:10px;color:var(--n4);transition:background .2s,color .2s}
+.v-lado button:hover{color:var(--n6);background:rgba(37,55,69,.35)}
+.v-lado button[aria-selected="true"]{color:var(--n6);font-weight:600;background:rgba(37,55,69,.6)}
+.v-lado button:focus-visible{outline:2px solid var(--n5);outline-offset:2px}
+.v-main[hidden]{display:none}
+.v-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.v-kpis div{background:rgba(17,33,45,.85);padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.v-kpis b{font-family:var(--f-display);font-size:26px;line-height:1.1;color:var(--n6);font-variant-numeric:tabular-nums}
+.v-kpis span{font-size:13px;color:var(--n4)}
+.v-graf{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.v-bloque{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(17,33,45,.7)}
+.v-sub{font-size:13px;font-weight:600;color:var(--n5)}
+.v-bloque .barra{grid-template-columns:minmax(90px,150px) 1fr auto;font-size:13px;gap:10px}
+.v-bloque .barra i{height:8px}
 .v-main{padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .v-tit{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
 .v-tit strong{font-family:var(--f-display);font-size:20px;color:var(--n6);font-weight:600}
@@ -310,7 +322,7 @@ select option{color:var(--n5);background:var(--n1)}
   .fila{grid-template-columns:1fr;gap:28px}
   .fila.inv>.fila-tx{order:0}
   .v-cuerpo{grid-template-columns:1fr}
-  .v-lado{display:none}
+  .v-lado{flex-direction:row;border-right:0;border-bottom:1px solid var(--line);padding:10px 14px}
 }
 @media (max-width:560px){
   .hero .wrap{padding-block:56px 0}

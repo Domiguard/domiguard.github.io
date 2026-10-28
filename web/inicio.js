@@ -1,4 +1,4 @@
-/* Domiguard: cifras en vivo de la portada. Salen de la tabla estado (lectura pública), que el robot
+/* Domiguard: portada. Pestañas de la ventana de ejemplo y cifras en vivo. Salen de la tabla estado (lectura pública), que el robot
    actualiza en cada revisión. Si no hay base (demostración) o falla la consulta, se dejan los textos de respaldo. */
 (function () {
   "use strict";
@@ -29,6 +29,24 @@
     poner("variantes_vigiladas", "Miles de"); poner("nrd_revisados", "Cientos de miles de");
     document.querySelectorAll(".cifras").forEach(function (e) { e.hidden = true; });
   }
+
+  /* ventana de ejemplo del panel: pestañas Alertas / Tendencias (flechas del teclado también) */
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.v-lado [role="tab"]'));
+  function elegir(t) {
+    tabs.forEach(function (x) {
+      var si = x === t;
+      x.setAttribute("aria-selected", String(si)); x.tabIndex = si ? 0 : -1;
+      document.getElementById(x.getAttribute("aria-controls")).hidden = !si;
+    });
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener("click", function () { elegir(t); });
+    t.addEventListener("keydown", function (e) {
+      var d = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 0;
+      if (!d) return;
+      e.preventDefault(); var n = tabs[(i + d + tabs.length) % tabs.length]; elegir(n); n.focus();
+    });
+  });
 
   if (!BASE || /TU-PROYECTO/.test(BASE)) { respaldo(); return; }
   var h = { apikey: LLAVE };
