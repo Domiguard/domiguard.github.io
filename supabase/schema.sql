@@ -93,7 +93,9 @@ alter table solicitudes enable row level security;
 drop policy if exists "enviar solicitud" on solicitudes;
 create policy "enviar solicitud" on solicitudes for insert to anon, authenticated with check (estado = 'nueva' and cliente_id is null);
 
--- Aceptar una contratación: en Table Editor > solicitudes, escribe el banco en cliente_id (uno existente como
+-- Aceptar una contratación: lo normal es el botón «Aceptar solicitud» del correo de aviso (web/aceptar.html y la
+-- Edge Function aceptar-solicitud, que además invita al cliente por correo). A mano también se puede:
+-- en Table Editor > solicitudes, escribe el banco en cliente_id (uno existente como
 -- 'bbva' o uno nuevo) y cambia estado a 'activa'. La base crea o completa el banco con sus dominios, guarda
 -- el correo de alertas y activa la cuenta con ese correo. Si después se cambia a otro estado, se desactiva.
 create or replace function public.activar_solicitud() returns trigger

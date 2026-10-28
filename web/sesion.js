@@ -16,17 +16,18 @@
 
   /* Al confirmar el correo, Supabase regresa a esta página con la sesión en la dirección (#access_token=...):
      se guarda y se limpia la dirección para que la llave no quede a la vista. */
-  var errorEnlace = "";
+  var errorEnlace = "", tipoEnlace = "";
   (function desdeEnlace() {
     var h = new URLSearchParams(location.hash.replace(/^#/, ""));
     if (!h.get("access_token") && !h.get("error")) return;
     if (h.get("access_token")) {
+      tipoEnlace = h.get("type") || "";          // "invite": llegó por la invitación y todavía no tiene contraseña
       var correo = "";
       try { correo = JSON.parse(atob(h.get("access_token").split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).email || ""; } catch (e) {}
       guardar({ access_token: h.get("access_token"), refresh_token: h.get("refresh_token"), correo: correo,
                 expira: Number(h.get("expires_at")) || Math.floor(Date.now() / 1000) + (Number(h.get("expires_in")) || 3600) });
     } else {
-      errorEnlace = /expired|invalid/i.test(h.get("error_description") || "") ? "El enlace de confirmación ya venció o ya se usó. Inicia sesión; si no puedes, crea la cuenta de nuevo."
+      errorEnlace = /expired|invalid/i.test(h.get("error_description") || "") ? "El enlace ya venció o ya se usó. Inicia sesión; si no tienes contraseña, pídele al equipo de Domiguard una invitación nueva."
                                                                               : "No se pudo confirmar el correo. Vuelve a intentarlo.";
     }
     history.replaceState(null, "", location.pathname + location.search);
@@ -47,10 +48,10 @@
     for (var i = 0; i < MENSAJES.length; i++) if (MENSAJES[i][0].test(t)) return MENSAJES[i][1];
     return "No se pudo completar. Vuelve a intentarlo en un momento.";
   }
-  function auth(ruta, cuerpo, token) {
+  function auth(ruta, cuerpo, token, metodo) {
     var h = { apikey: cfg.SUPABASE_ANON_KEY, "Content-Type": "application/json" };
     if (token) h.Authorization = "Bearer " + token;
-    return fetch(BASE + "/auth/v1" + ruta, { method: "POST", headers: h, body: JSON.stringify(cuerpo || {}) })
+    return fetch(BASE + "/auth/v1" + ruta, { method: metodo || "POST", headers: h, body: JSON.stringify(cuerpo || {}) })
       .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error(mensaje(d)); return d; }); });
   }
   function aSesion(d) {
@@ -125,6 +126,32 @@
     card.appendChild(form); caja.appendChild(card);
     var primero = card.querySelector("input"); if (primero) primero.focus();
   }
+  /* Invitación: la persona entra con el enlace del correo y aquí crea la contraseña para sus próximas visitas */
+  function crearClave(caja, correo, alTerminar) {
+    caja.textContent = "";
+    var card = el("div", "card acceso");
+    card.appendChild(el("h3", "", "Crea tu contraseña"));
+    card.appendChild(el("p", "", "Bienvenido a Domiguard. Crea una contraseña para " + correo + "; la usarás para entrar a tu panel la próxima vez."));
+    var form = el("form", "form");
+    form.appendChild(campo("ac-nueva", "Contraseña nueva", "password", { required: "", minlength: "6", autocomplete: "new-password" }));
+    form.appendChild(campo("ac-repite", "Repite la contraseña", "password", { required: "", minlength: "6", autocomplete: "new-password" }));
+    var btn = el("button", "btn p", "Guardar y entrar"); btn.type = "submit";
+    var pie = el("div", "acceso-pie"); pie.appendChild(btn); form.appendChild(pie);
+    var aviso = el("p", "msg no"); aviso.hidden = true; aviso.setAttribute("role", "alert"); form.appendChild(aviso);
+    form.onsubmit = function (e) {
+      e.preventDefault(); aviso.hidden = true;
+      var a = form.querySelector("#ac-nueva").value, b = form.querySelector("#ac-repite").value;
+      if (a !== b) { aviso.textContent = "Las dos contraseñas no coinciden."; aviso.hidden = false; return; }
+      btn.disabled = true;
+      vigente().then(function (s) {
+        if (!s) throw new Error("La sesión venció. Pídele al equipo de Domiguard una invitación nueva.");
+        return auth("/user", { password: a }, s.access_token, "PUT");
+      }).then(function () { tipoEnlace = ""; alTerminar(); })
+        .catch(function (err) { aviso.textContent = err.message; aviso.hidden = false; btn.disabled = false; });
+    };
+    card.appendChild(form); caja.appendChild(card);
+    form.querySelector("input").focus();
+  }
   function barra(correo, nombreBanco) {
     var b = document.getElementById("sesion-barra"); if (!b) return;
     b.textContent = "";
@@ -143,6 +170,10 @@
     function revisar() {
       vigente().then(function (s) {
         if (!s) { sinSesion(); return; }
+        if (tipoEnlace === "invite" || tipoEnlace === "recovery") {
+          contenido.hidden = true; caja.hidden = false; if (estado) estado.textContent = "";
+          crearClave(caja, s.correo, revisar); return;
+        }
         return Promise.all([perfil(), rest("/clientes?select=id,nombre")]).then(function (res) {
           var p = res[0], nombres = {}; res[1].forEach(function (c) { nombres[c.id] = c.nombre; });
           barra(s.correo, p && nombres[p.cliente_id]);

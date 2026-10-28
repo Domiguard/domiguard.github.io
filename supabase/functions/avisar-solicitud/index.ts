@@ -14,6 +14,14 @@ const PLANES: Record<string, string> = {
   empresarial: "Empresarial (más de 10 dominios)",
 };
 
+// Enlace firmado para aceptar la solicitud desde el correo (lo comprueba la función aceptar-solicitud)
+async function firma(id: number | string) {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(LLAVE), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const s = new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode("aceptar:" + id)));
+  return Array.from(s.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+const ACEPTAR = "https://domiguard.github.io/aceptar.html";
+
 function encabezados(extra: Record<string, string> = {}) {
   return { apikey: LLAVE, Authorization: `Bearer ${LLAVE}`, "Content-Type": "application/json", ...extra };
 }
@@ -21,14 +29,14 @@ function esc(t: unknown) {
   return String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 }
 
-function correo(s: Record<string, any>) {
+function correo(s: Record<string, any>, enlace: string) {
   const plan = PLANES[s.plan] || s.plan;
   const dominios: string[] = s.dominios || [];
   const fecha = new Date(s.creada_en).toLocaleString("es-MX", { timeZone: "America/Merida", dateStyle: "long", timeStyle: "short" });
   const pasos = [
-    `Abre Supabase > Table Editor > solicitudes (fila ${s.id}): ${EDITOR}`,
-    "En cliente_id escribe el banco: uno existente (bbva, santander, hsbc, paypal, binance, banorte) o uno nuevo en minúsculas.",
-    "Cambia estado a activa y guarda. Sus dominios se suman solos a la vigilancia y su cuenta se activa con su correo.",
+    `Abre el enlace para aceptarla: ${enlace}`,
+    "Elige el banco (uno existente como bbva o uno nuevo en minúsculas) y toca Aceptar e invitar.",
+    "Sus dominios se suman solos a la vigilancia y al cliente le llega la invitación para entrar a su panel.",
   ];
   const texto = [
     "Nueva solicitud de contratación en Domiguard (pago de demostración).", "",
@@ -41,10 +49,9 @@ function correo(s: Record<string, any>) {
 <p><b>Plan:</b> ${esc(plan)}<br><b>Empresa:</b> ${esc(s.empresa || "(no la escribió)")}<br>
 <b>Correo para alertas:</b> ${esc(s.correo)}<br><b>Fecha:</b> ${esc(fecha)} (hora de Mérida)</p>
 <p><b>Dominios (${dominios.length}):</b></p><ul>${dominios.map((d) => `<li><code>${esc(d)}</code></li>`).join("")}</ul>
-<p><b>Para aceptarla:</b></p><ol>
-<li>Abre Supabase &gt; Table Editor &gt; <b>solicitudes</b> (fila ${esc(s.id)}): <a href="${EDITOR}">abrir Table Editor</a></li>
-<li>En <b>cliente_id</b> escribe el banco: uno existente (bbva, santander, hsbc, paypal, binance, banorte) o uno nuevo en minúsculas.</li>
-<li>Cambia <b>estado</b> a <b>activa</b> y guarda. Sus dominios se suman solos a la vigilancia y su cuenta se activa con su correo.</li></ol>`;
+<p><a href="${esc(enlace)}" style="display:inline-block;background:#11212D;color:#CCD0CF;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:600">Aceptar solicitud</a></p>
+<p>Ahí eliges el banco y tocas <b>Aceptar e invitar</b>: sus dominios se suman solos a la vigilancia y al cliente le llega la invitación para entrar a su panel.</p>
+<p style="color:#4A5C6A;font-size:13px">También puedes aceptarla a mano en Supabase &gt; Table Editor &gt; <a href="${EDITOR}">solicitudes</a> (fila ${esc(s.id)}).</p>`;
   return { asunto: `Nueva solicitud: ${s.empresa || s.correo} · Plan ${plan.split(" ")[0]}`, texto, html };
 }
 
@@ -63,7 +70,7 @@ Deno.serve(async () => {
   const avisadas: number[] = [];
   try {
     for (const s of pendientes) {
-      const c = correo(s);
+      const c = correo(s, `${ACEPTAR}#id=${s.id}&t=${await firma(s.id)}`);
       await cliente.send({ from: `Domiguard <${usuario}>`, to: destino, subject: c.asunto, content: c.texto, html: c.html });
       avisadas.push(s.id);
     }
