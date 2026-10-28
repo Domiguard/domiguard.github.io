@@ -5,7 +5,9 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function nf(n) { return Number(n).toLocaleString("en-US"); }
 
-  var S = { clientes: [], alertas: [], estado: null, cliente: null, filtro: "abiertas", canal: "todos" };
+  var S = { clientes: [], alertas: [], estado: null, cliente: null, filtro: "abiertas", canal: "todos", busqueda: "" };
+  /* lo que se escribe en el buscador, sin hxxp://, sin corchetes y en minúsculas */
+  function limpiarBusqueda(t) { return String(t || "").toLowerCase().trim().replace(/^h[xt]{2}ps?:\/\//, "").replace(/\[\.\]/g, ".").replace(/\/.*$/, ""); }
   var ABIERTA = { nueva: 1, enviada: 1, en_baja: 1 };
   var ESTADOS = { nueva: "Nueva", enviada: "Avisada al cliente", en_baja: "En proceso de baja", dada_de_baja: "Dada de baja", falsa_alarma: "Falsa alarma" };
   var PRIO = { alta: ["p-hi", "Prioridad alta"], media: ["p-mid", "Prioridad media"], baja: ["p-lo", "Prioridad baja"] };
@@ -163,6 +165,7 @@
   function renderLista() {
     var rows = delCliente().filter(function (a) {
       if (S.canal !== "todos" && a.canal !== S.canal) return false;
+      if (S.busqueda && String(a.host || "").toLowerCase().indexOf(S.busqueda) < 0) return false;
       if (S.filtro === "abiertas") return ABIERTA[a.estado];
       if (S.filtro === "alta") return ABIERTA[a.estado] && a.prioridad === "alta";
       if (S.filtro === "cerradas") return !ABIERTA[a.estado];
@@ -173,7 +176,8 @@
     if (xl) { xl.disabled = !rows.length; xl.title = "Descargar Excel (" + nf(rows.length) + (rows.length === 1 ? " alerta)" : " alertas)"); xl.setAttribute("aria-label", xl.title); }
     if (csv) csv.disabled = !rows.length;
     var box = $("m-list"); box.textContent = ""; $("m-empty").hidden = rows.length > 0;
-    $("m-empty").textContent = delCliente().length ? "No hay alertas con este filtro." : "Sin alertas por ahora. Seguimos vigilando tus dominios todos los días.";
+    $("m-empty").textContent = !delCliente().length ? "Sin alertas por ahora. Seguimos vigilando tus dominios todos los días."
+      : S.busqueda ? "Ningún dominio contiene «" + S.busqueda + "» con este filtro." : "No hay alertas con este filtro.";
     rows.forEach(function (a) { box.appendChild(tarjeta(a)); });
   }
   /* ---------- descarga en CSV (lo que se ve con los filtros activos, con la evidencia completa) ---------- */
@@ -268,6 +272,7 @@
   }
 
   function iniciar() {
+    if ($("m-buscar")) $("m-buscar").oninput = function () { S.busqueda = limpiarBusqueda(this.value); avisoLista(""); renderLista(); };
     if ($("m-excel")) $("m-excel").onclick = descargarExcel;
     if ($("m-csv")) $("m-csv").onclick = descargarCSV;
     cargarDatos().then(function () { initSelector(); renderTodo(); setInterval(refrescar, 5 * 60 * 1000); })

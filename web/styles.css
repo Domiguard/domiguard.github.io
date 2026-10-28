@@ -229,7 +229,7 @@ footer img{height:36px;width:auto;align-self:flex-start}
 .form{display:flex;flex-wrap:wrap;gap:16px}
 .field{flex:1 1 170px;min-width:0;display:flex;flex-direction:column;gap:6px}
 .field label{font-weight:600;font-size:15px;color:var(--n5)}
-input[type=text],input[type=email],input[type=password],select,textarea{font:inherit;color:var(--n5);background:var(--glass-input);padding:12px 14px;border:1px solid var(--line2);border-radius:14px;width:100%;min-height:48px}
+input[type=text],input[type=email],input[type=password],input[type=search],select,textarea{font:inherit;color:var(--n5);background:var(--glass-input);padding:12px 14px;border:1px solid var(--line2);border-radius:14px;width:100%;min-height:48px}
 input::placeholder,textarea::placeholder{color:var(--mute)}
 input:focus,select:focus,textarea:focus{border-color:var(--n4)}
 select option{color:var(--n5);background:var(--n1)}
@@ -256,6 +256,8 @@ select option{color:var(--n5);background:var(--n1)}
 .ev dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:15px}
 .ev dt{color:var(--mute)}.ev dd{margin:0;word-break:break-word;color:var(--n5)}
 .ev ol{margin:0;padding-left:20px;font-size:15px;display:flex;flex-direction:column;gap:6px;color:var(--n5)}
+.buscar{margin-bottom:14px;max-width:520px}
+input[type=search]::-webkit-search-cancel-button{cursor:pointer;filter:invert(.8)}
 .marcar{display:flex;flex-direction:column;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .marcar h4{margin:0;font-family:var(--f-display);font-size:17px;font-weight:600;color:var(--n6)}
 .marcar p{margin:0}
