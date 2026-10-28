@@ -297,6 +297,9 @@ select option{color:var(--n5);background:var(--n1)}
 .acceso .btn{align-self:flex-start;text-align:center}
 .acceso .msg{margin:0}
 .acceso p{margin:0;color:var(--n4)}
+.enlace{all:unset;cursor:pointer;align-self:flex-start;color:var(--n4);font-size:14px;text-decoration:underline;text-underline-offset:3px}
+.enlace:hover{color:var(--n6)}
+.enlace:focus-visible{outline:2px solid var(--n5);outline-offset:3px;border-radius:4px}
 .sesion-barra{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:flex-end;align-items:center;margin-top:4px}
 .sesion-barra:empty{display:none}
 .salir{border:1px solid var(--line2);background:rgba(17,33,45,.6);color:var(--n5);border-radius:999px;padding:6px 14px;font:600 13px var(--f-body);cursor:pointer;min-height:36px}

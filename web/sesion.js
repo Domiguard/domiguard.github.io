@@ -97,6 +97,34 @@
     for (var k in (extra || {})) i.setAttribute(k, extra[k]);
     f.appendChild(l); f.appendChild(i); return f;
   }
+  /* Olvidé mi contraseña: Supabase manda un enlace que regresa a esta página con type=recovery (ahí se crea la nueva) */
+  function olvido(caja, clientes, alEntrar) {
+    caja.textContent = "";
+    var card = el("div", "card acceso");
+    card.appendChild(el("h3", "", "¿Olvidaste tu contraseña?"));
+    card.appendChild(el("p", "", "Escribe el correo de tu cuenta y te mandamos un enlace para crear una contraseña nueva."));
+    var form = el("form", "form");
+    form.appendChild(campo("ac-correo", "Correo", "email", { required: "", autocomplete: "email" }));
+    var btn = el("button", "btn p", "Enviar enlace"); btn.type = "submit";
+    var pie = el("div", "acceso-pie"); pie.appendChild(btn); form.appendChild(pie);
+    var aviso = el("p", "msg no"); aviso.hidden = true; aviso.setAttribute("role", "alert"); form.appendChild(aviso);
+    form.onsubmit = function (e) {
+      e.preventDefault(); aviso.hidden = true; btn.disabled = true;
+      var correo = form.querySelector("#ac-correo").value.trim();
+      auth("/recover?redirect_to=" + encodeURIComponent(location.origin + location.pathname), { email: correo })
+        .then(function () {
+          // mismo mensaje exista o no la cuenta, para que nadie pueda averiguar quién es cliente
+          aviso.className = "msg ok"; aviso.textContent = "Si existe una cuenta con ese correo, te mandamos un enlace para crear una contraseña nueva. Revisa también la carpeta de spam."; aviso.hidden = false;
+        })
+        .catch(function (err) { aviso.className = "msg no"; aviso.textContent = err.message; aviso.hidden = false; btn.disabled = false; });
+    };
+    card.appendChild(form);
+    var volver = el("button", "enlace", "Volver a iniciar sesión"); volver.type = "button";
+    volver.onclick = function () { formulario(caja, clientes, "entrar", alEntrar); };
+    card.appendChild(volver);
+    caja.appendChild(card);
+    form.querySelector("input").focus();
+  }
   function formulario(caja, clientes, modo, alEntrar) {
     caja.textContent = "";
     var card = el("div", "card acceso");
@@ -114,6 +142,11 @@
     var aviso = el("p", "msg no"); aviso.hidden = true; aviso.setAttribute("role", "alert");
     form.appendChild(aviso);
     if (modo === "crear") form.appendChild(el("p", "note", "Usa el mismo correo con el que contrataste tu plan. Tu panel se activa con tu banco cuando el equipo de Domiguard acepte la contratación."));
+    if (modo === "entrar") {
+      var olv = el("button", "enlace", "¿Olvidaste tu contraseña?"); olv.type = "button";
+      olv.onclick = function () { olvido(caja, clientes, alEntrar); };
+      form.appendChild(olv);
+    }
     form.onsubmit = function (e) {
       e.preventDefault(); aviso.hidden = true; btn.disabled = true;
       var correo = form.querySelector("#ac-correo").value.trim(), clave = form.querySelector("#ac-clave").value;
@@ -130,8 +163,10 @@
   function crearClave(caja, correo, alTerminar) {
     caja.textContent = "";
     var card = el("div", "card acceso");
-    card.appendChild(el("h3", "", "Crea tu contraseña"));
-    card.appendChild(el("p", "", "Bienvenido a Domiguard. Crea una contraseña para " + correo + "; la usarás para entrar a tu panel la próxima vez."));
+    var nueva = tipoEnlace === "recovery";
+    card.appendChild(el("h3", "", nueva ? "Crea tu nueva contraseña" : "Crea tu contraseña"));
+    card.appendChild(el("p", "", nueva ? "Escribe una contraseña nueva para " + correo + ". Desde ahora entrarás con ella."
+                                       : "Bienvenido a Domiguard. Crea una contraseña para " + correo + "; la usarás para entrar a tu panel la próxima vez."));
     var form = el("form", "form");
     form.appendChild(campo("ac-nueva", "Contraseña nueva", "password", { required: "", minlength: "6", autocomplete: "new-password" }));
     form.appendChild(campo("ac-repite", "Repite la contraseña", "password", { required: "", minlength: "6", autocomplete: "new-password" }));
