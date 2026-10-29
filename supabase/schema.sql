@@ -451,3 +451,45 @@ revoke all on function public.reportes_pendientes(boolean, int) from public, ano
 revoke all on function public.marcar_reporte_auto(text, text, boolean) from public, anon, authenticated;
 grant execute on function public.reportes_pendientes(boolean, int) to service_role;
 grant execute on function public.marcar_reporte_auto(text, text, boolean) to service_role;
+
+-- Copia de cada reporte que manda reportar-abuso, tal cual salió (asunto, destinatario y texto), para el expediente.
+-- prueba: el correo le llegó al equipo (AVISOS_CORREO) y no al registrador; correo_abuso: a quién iría o fue.
+-- La ve el banco en su panel («Ver reporte enviado»); solo la escribe la función, con la llave de servicio.
+create table if not exists reportes_enviados (
+  id            bigserial primary key,
+  alerta_id     text not null references alertas(id) on delete cascade,
+  cliente_id    text not null,
+  enviado_en    timestamptz not null default now(),
+  prueba        boolean not null,
+  destinatario  text not null,
+  correo_abuso  text not null,
+  asunto        text not null,
+  cuerpo        text not null
+);
+create index if not exists reportes_enviados_alerta_idx on reportes_enviados (alerta_id, enviado_en);
+alter table reportes_enviados enable row level security;
+drop policy if exists "reportes de mi banco" on reportes_enviados;
+create policy "reportes de mi banco" on reportes_enviados for select to authenticated
+  using (exists (select 1 from perfiles p where p.user_id = auth.uid() and p.aprobado and p.cliente_id = reportes_enviados.cliente_id));
+
+-- marcar_reporte_auto ahora también guarda la copia del correo. La versión vieja (3 datos) se deja para que la
+-- función desplegada no falle mientras se cambia; ya no la usa nadie.
+create or replace function public.marcar_reporte_auto(p_id text, p_correo text, p_prueba boolean,
+                                                      p_destinatario text, p_asunto text, p_cuerpo text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into reportes_enviados (alerta_id, cliente_id, prueba, destinatario, correo_abuso, asunto, cuerpo)
+  select id, cliente_id, p_prueba, p_destinatario, p_correo, p_asunto, p_cuerpo from alertas where id = p_id;
+  if p_prueba then
+    update alertas set reporte_prueba_en = now() where id = p_id;
+    return;
+  end if;
+  update alertas set reporte_auto_en = now(),
+         estado = case when estado in ('nueva', 'enviada', 'confirmada') then 'en_baja' else estado end,
+         baja_pedida_en = coalesce(baja_pedida_en, now()), dada_de_baja_en = null
+   where id = p_id;
+  insert into alertas_historial (alerta_id, cliente_id, evento, despues, nota)
+  select id, cliente_id, 'reporte', 'registrador', 'Correo automático a ' || p_correo from alertas where id = p_id;
+end $$;
+revoke all on function public.marcar_reporte_auto(text, text, boolean, text, text, text) from public, anon, authenticated;
+grant execute on function public.marcar_reporte_auto(text, text, boolean, text, text, text) to service_role;

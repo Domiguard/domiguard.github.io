@@ -149,12 +149,27 @@
   function historial(a) {
     if (a._historial) return Promise.resolve(a._historial);
     var cfg = window.DOMIGUARD_CONFIG || {};
-    if (!cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL)) { a._historial = historialDemo(a); return Promise.resolve(a._historial); }
+    if (!cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL)) { a._historial = juntarReportes(historialDemo(a), a._reportes || []); return Promise.resolve(a._historial); }
+    var base = cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1", id = encodeURIComponent(a.id);
     return window.DomiguardSesion.encabezados().then(function (h) {
-      return fetch(cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/alertas_historial?select=en,evento,antes,despues,por,solo_fecha,nota&alerta_id=eq." +
-                   encodeURIComponent(a.id) + "&order=en.asc,id.asc", { headers: h });
-    }).then(function (r) { if (!r.ok) throw new Error("historial " + r.status); return r.json(); })
-      .then(function (filas) { a._historial = filas; return filas; });
+      return Promise.all([
+        fetch(base + "/alertas_historial?select=en,evento,antes,despues,por,solo_fecha,nota&alerta_id=eq." + id + "&order=en.asc,id.asc", { headers: h })
+          .then(function (r) { if (!r.ok) throw new Error("historial " + r.status); return r.json(); }),
+        fetch(base + "/reportes_enviados?select=enviado_en,prueba,destinatario,correo_abuso,asunto,cuerpo&alerta_id=eq." + id + "&order=enviado_en.asc", { headers: h })
+          .then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+      ]);
+    }).then(function (res) { a._historial = juntarReportes(res[0], res[1]); return a._historial; });
+  }
+  /* cada copia de reportes_enviados va con su movimiento del historial; las de prueba no tienen movimiento: se agregan */
+  function juntarReportes(filas, reportes) {
+    reportes.forEach(function (r) {
+      var f = !r.prueba && filas.filter(function (x) {
+        return x.evento === "reporte" && x.despues === "registrador" && !x.por && !x.reporte && String(x.nota || "").indexOf(r.correo_abuso) >= 0;
+      })[0];
+      if (f) f.reporte = r;
+      else filas.push({ en: r.enviado_en, evento: "prueba", reporte: r });
+    });
+    return filas.sort(function (x, y) { return new Date(x.en) - new Date(y.en); });
   }
   /* demostración: lo que se sabe de la alerta de ejemplo */
   function historialDemo(a) {
@@ -177,10 +192,19 @@
     if (f.evento === "estado") return HECHO[f.despues] || "Estado: " + (ESTADOS[f.despues] || f.despues);
     if (f.evento === "reporte") return "Reportada " + (REPORTADA[f.despues] || f.despues);
     if (f.evento === "respuesta") return "Respuesta " + (RESPONDIO[f.despues] || f.despues);
+    if (f.evento === "prueba") return "Reporte de prueba al registrador (te llegó a ti, no salió)";
     if (f.evento === "prioridad") return "La prioridad cambió de " + f.antes + " a " + f.despues;
     if (f.evento === "dns") return f.despues === "no_responde" ? "El sitio dejó de responder (revisión por DNS)"
       : f.antes === "no_responde" ? "El sitio volvió a responder (revisión por DNS)" : "El sitio responde (revisión por DNS)";
     return f.evento;
+  }
+  /* el correo tal cual salió (el dominio ya va desactivado: hxxps://sitio[.]com) */
+  function copiaReporte(r) {
+    var d = el("details", "h-reporte"), s = el("summary", "", "Ver reporte enviado"); d.appendChild(s);
+    d.appendChild(el("p", "tiny", "Para: " + r.destinatario + (r.prueba ? " (prueba; en modo real iría a " + r.correo_abuso + ")" : "")));
+    d.appendChild(el("p", "tiny", "Asunto: " + r.asunto));
+    d.appendChild(el("pre", "", r.cuerpo));
+    return d;
   }
   function pintarHistorial(linea, filas) {
     linea.textContent = "";
@@ -191,6 +215,7 @@
       li.appendChild(el("span", "h-que", textoHistorial(f)));
       if (f.nota) li.appendChild(el("span", "h-nota", "«" + f.nota + "»"));
       li.appendChild(el("span", "h-quien", quien(f)));
+      if (f.reporte) li.appendChild(copiaReporte(f.reporte));
       linea.appendChild(li);
     });
   }

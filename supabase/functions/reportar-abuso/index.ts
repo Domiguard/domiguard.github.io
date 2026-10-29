@@ -106,15 +106,18 @@ Deno.serve(async (req) => {
       const abuso = String(f.evidencia?.correo_abuso || "").trim();
       const m = armar(f);
       const aviso = `MODO PRUEBA: este correo no salió al registrador. En modo real iría a ${abuso}.`;
+      const destino = prueba ? equipo : abuso;
+      const asunto = (prueba ? "[PRUEBA] " : "") + m.asunto;
+      const texto = (prueba ? aviso + "\n\n" : "") + m.texto;
       try {
         await smtp.send({
-          from: `Domiguard <${usuario}>`, replyTo: usuario,
-          to: prueba ? equipo : abuso,
-          subject: (prueba ? "[PRUEBA] " : "") + m.asunto,
-          content: (prueba ? aviso + "\n\n" : "") + m.texto,
+          from: `Domiguard <${usuario}>`, replyTo: usuario, to: destino, subject: asunto, content: texto,
           html: (prueba ? `<p style="background:#F2C46D;color:#06141B;padding:8px 12px"><b>${esc(aviso)}</b></p>` : "") + m.html,
         });
-        await base("/rest/v1/rpc/marcar_reporte_auto", { method: "POST", body: JSON.stringify({ p_id: f.id, p_correo: abuso, p_prueba: prueba }) });
+        // la copia que se guarda (reportes_enviados) es el mismo texto que salió
+        const g = await base("/rest/v1/rpc/marcar_reporte_auto", { method: "POST", body: JSON.stringify({
+          p_id: f.id, p_correo: abuso, p_prueba: prueba, p_destinatario: destino, p_asunto: asunto, p_cuerpo: texto }) });
+        if (!g.ok) console.error("Se mandó el reporte de", f.id, "pero no se pudo anotar:", g.status, (await g.text()).slice(0, 200));
         hechos.push(f.id);
       } catch (e) {
         console.error("No se pudo mandar el reporte de", f.id, e);
