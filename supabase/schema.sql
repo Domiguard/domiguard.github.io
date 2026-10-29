@@ -355,3 +355,38 @@ begin
 end $$;
 revoke all on function public.marcar_alerta(text, text) from public, anon;
 grant execute on function public.marcar_alerta(text, text) to authenticated;
+
+-- Reporte con comprobante: al marcar «Pedí la baja» o «Ya me respondieron» el cliente anota a quién (destino) y,
+-- si quiere, el folio o la respuesta (nota, máximo 300 letras). Se guarda en el historial (evento reporte o respuesta)
+-- y la alerta pasa a en_baja / en_seguimiento si todavía estaba antes en el camino. Solo para alertas de SU banco.
+alter table alertas_historial add column if not exists nota text;
+alter table alertas_historial drop constraint if exists alertas_historial_evento_check;
+alter table alertas_historial add constraint alertas_historial_evento_check
+  check (evento in ('detectada', 'estado', 'prioridad', 'dns', 'reporte', 'respuesta'));
+create or replace function public.anotar_reporte(p_id text, p_tipo text, p_destino text, p_nota text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare banco text; actual text; nuevo text; texto text; fila alertas;
+begin
+  if p_tipo not in ('reporte', 'respuesta') then raise exception 'Tipo no válido'; end if;
+  if p_destino not in ('google', 'microsoft', 'registrador', 'hosting', 'banco', 'otro') then raise exception 'Destino no válido'; end if;
+  texto := nullif(btrim(coalesce(p_nota, '')), '');
+  if length(texto) > 300 then raise exception 'El folio o la respuesta puede tener hasta 300 letras'; end if;
+  select cliente_id into banco from perfiles where user_id = auth.uid() and aprobado and cliente_id is not null;
+  if banco is null then raise exception 'Tu cuenta no tiene un plan activo'; end if;
+  select estado into actual from alertas where id = p_id and cliente_id = banco;
+  if not found then raise exception 'Alerta no encontrada'; end if;
+  nuevo := case when p_tipo = 'reporte' and actual in ('nueva', 'enviada', 'confirmada') then 'en_baja'
+                when p_tipo = 'respuesta' and actual in ('nueva', 'enviada', 'confirmada', 'en_baja') then 'en_seguimiento'
+                else actual end;
+  if nuevo <> actual then
+    update alertas set estado = nuevo, baja_pedida_en = coalesce(baja_pedida_en, now()), dada_de_baja_en = null,
+                       estado_cambiado_por = auth.uid()
+     where id = p_id;
+  end if;
+  insert into alertas_historial (alerta_id, cliente_id, evento, despues, nota, por)
+  values (p_id, banco, p_tipo, p_destino, texto, auth.uid());
+  select * into fila from alertas where id = p_id;
+  return jsonb_build_object('id', fila.id, 'estado', fila.estado, 'baja_pedida_en', fila.baja_pedida_en, 'dada_de_baja_en', fila.dada_de_baja_en);
+end $$;
+revoke all on function public.anotar_reporte(text, text, text, text) from public, anon;
+grant execute on function public.anotar_reporte(text, text, text, text) to authenticated;

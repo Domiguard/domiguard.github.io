@@ -131,7 +131,7 @@
     var cfg = window.DOMIGUARD_CONFIG || {};
     if (!cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL)) { a._historial = historialDemo(a); return Promise.resolve(a._historial); }
     return window.DomiguardSesion.encabezados().then(function (h) {
-      return fetch(cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/alertas_historial?select=en,evento,antes,despues,por,solo_fecha&alerta_id=eq." +
+      return fetch(cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/alertas_historial?select=en,evento,antes,despues,por,solo_fecha,nota&alerta_id=eq." +
                    encodeURIComponent(a.id) + "&order=en.asc,id.asc", { headers: h });
     }).then(function (r) { if (!r.ok) throw new Error("historial " + r.status); return r.json(); })
       .then(function (filas) { a._historial = filas; return filas; });
@@ -149,12 +149,14 @@
     return new Date(f.en).toLocaleString("es-MX", o);
   }
   function quien(f) {
-    if (f.evento !== "estado" || !f.por) return "Robot de Domiguard";
+    if (!f.por) return "Robot de Domiguard";
     return S.perfil && f.por === S.perfil.user_id ? "Tú" : "Otra persona de tu equipo";
   }
   function textoHistorial(f) {
     if (f.evento === "detectada") return "Detectada" + (CANAL[f.despues] ? " · " + CANAL[f.despues] : "");
     if (f.evento === "estado") return HECHO[f.despues] || "Estado: " + (ESTADOS[f.despues] || f.despues);
+    if (f.evento === "reporte") return "Reportada " + (REPORTADA[f.despues] || f.despues);
+    if (f.evento === "respuesta") return "Respuesta " + (RESPONDIO[f.despues] || f.despues);
     if (f.evento === "prioridad") return "La prioridad cambió de " + f.antes + " a " + f.despues;
     if (f.evento === "dns") return f.despues === "no_responde" ? "El sitio dejó de responder (revisión por DNS)"
       : f.antes === "no_responde" ? "El sitio volvió a responder (revisión por DNS)" : "El sitio responde (revisión por DNS)";
@@ -167,6 +169,7 @@
       var li = el("li");
       li.appendChild(el("span", "h-cuando", cuando(f)));
       li.appendChild(el("span", "h-que", textoHistorial(f)));
+      if (f.nota) li.appendChild(el("span", "h-nota", "«" + f.nota + "»"));
       li.appendChild(el("span", "h-quien", quien(f)));
       linea.appendChild(li);
     });
@@ -204,23 +207,64 @@
 
   /* ---------- el cliente marca el estado de la alerta (función marcar_alerta de la base: solo su banco) ---------- */
   var BOTONES = [["confirmada", "Sí es phishing"], ["en_baja", "Pedí la baja"], ["en_seguimiento", "Ya me respondieron"], ["dada_de_baja", "Ya la dieron de baja"], ["falsa_alarma", "Falsa alarma"], ["nueva", "Volver a nueva"]];
+  /* «Pedí la baja» y «Ya me respondieron» piden a quién y, si se quiere, el folio o la respuesta (función anotar_reporte) */
+  var COMPROBANTE = { en_baja: "reporte", en_seguimiento: "respuesta" };
+  var DESTINOS = [["google", "Google"], ["microsoft", "Microsoft"], ["registrador", "Registrador del dominio"],
+                  ["hosting", "Proveedor del hosting"], ["banco", "Área de fraude del banco"], ["otro", "Otro"]];
+  var REPORTADA = { google: "a Google", microsoft: "a Microsoft", registrador: "al registrador del dominio", hosting: "al proveedor del hosting",
+                    banco: "al área de fraude del banco", otro: "en otro lugar" };
+  var RESPONDIO = { google: "de Google", microsoft: "de Microsoft", registrador: "del registrador del dominio", hosting: "del proveedor del hosting",
+                    banco: "del área de fraude del banco", otro: "de otro lugar" };
+  var nForm = 0;
   function acciones(a) {
-    var caja = el("div", "marcar"), fila = el("div", "acciones");
+    var caja = el("div", "marcar"), fila = el("div", "acciones"), e = a.evidencia || {}, form = null;
     caja.appendChild(el("h4", "", "¿Qué hiciste con este sitio?"));
     var aviso = el("p", "tiny"); aviso.setAttribute("role", "status");
+    function bloquear(si) { caja.querySelectorAll("button,select,input").forEach(function (x) { x.disabled = si; }); }
+    function listo() {
+      a._historial = null; S.abierta = a.id; renderKpis(); renderChips(); renderCanales(); renderLista();
+      // si con el filtro actual la alerta ya no se ve, se avisa a dónde pasó
+      var sigue = (S.visibles || []).some(function (x) { return x.id === a.id; });
+      avisoLista(sigue ? "" : "Guardado: " + a.host.replace(/\./g, "[.]") + " pasó a «" + (ABIERTA[a.estado] ? "Abiertas" : "Cerradas") + "».");
+    }
+    function fallo(err) { aviso.textContent = err.message; bloquear(false); }
+    function pedirComprobante(tipo) {
+      if (form) form.remove();
+      var n = ++nForm, rep = tipo === "reporte";
+      form = el("form", "form comprobante");
+      var f1 = el("div", "field"), l1 = el("label", "", rep ? "¿A quién lo reportaste?" : "¿Quién te respondió?"), sel = el("select");
+      l1.htmlFor = sel.id = "destino-" + n;
+      DESTINOS.forEach(function (d) { var o = el("option", "", d[1]); o.value = d[0]; sel.appendChild(o); });
+      var pista = el("span", "tiny");
+      function verPista() {
+        pista.textContent = sel.value === "registrador" && e.registrador ? "Registrador: " + e.registrador + (e.correo_abuso ? " · correo de abuso: " + e.correo_abuso : "") : "";
+        pista.hidden = !pista.textContent;
+      }
+      sel.onchange = verPista; verPista();
+      f1.appendChild(l1); f1.appendChild(sel); f1.appendChild(pista);
+      var f2 = el("div", "field"), l2 = el("label", "", rep ? "Folio o comprobante (opcional)" : "¿Qué te respondieron? (opcional)"), txt = el("input");
+      l2.htmlFor = txt.id = "nota-" + n; txt.type = "text"; txt.maxLength = 300; txt.autocomplete = "off";
+      txt.placeholder = rep ? "Por ejemplo el número de caso que te dieron" : "Por ejemplo: «Recibimos tu reporte»";
+      f2.appendChild(l2); f2.appendChild(txt);
+      var bt = el("div", "acciones"), ok = el("button", "chip", "Guardar"), no = el("button", "chip", "Cancelar");
+      ok.type = "submit"; no.type = "button"; ok.setAttribute("aria-pressed", "true");
+      no.onclick = function () { form.remove(); form = null; aviso.textContent = ""; };
+      bt.appendChild(ok); bt.appendChild(no);
+      form.appendChild(f1); form.appendChild(f2); form.appendChild(bt);
+      form.onsubmit = function (ev) {
+        ev.preventDefault(); bloquear(true); aviso.textContent = "Guardando…";
+        anotar(a, tipo, sel.value, txt.value.trim()).then(listo).catch(fallo);
+      };
+      fila.after(form); sel.focus();
+    }
     BOTONES.forEach(function (b) {
       if (b[0] === "nueva" && a.estado === "nueva") return;
       var btn = el("button", "chip", b[1]); btn.type = "button"; btn.setAttribute("aria-pressed", String(a.estado === b[0]));
       btn.onclick = function () {
+        if (COMPROBANTE[b[0]]) { pedirComprobante(COMPROBANTE[b[0]]); return; }   // también sirve para anotar otro reporte
         if (a.estado === b[0]) return;
-        fila.querySelectorAll("button").forEach(function (x) { x.disabled = true; }); aviso.textContent = "Guardando…";
-        marcar(a, b[0]).then(function () {
-          a._historial = null; S.abierta = a.id; renderKpis(); renderChips(); renderCanales(); renderLista();
-          // si con el filtro actual la alerta ya no se ve, se avisa a dónde pasó
-          var sigue = (S.visibles || []).some(function (x) { return x.id === a.id; });
-          avisoLista(sigue ? "" : "Guardado: " + a.host.replace(/\./g, "[.]") + " pasó a «" + (ABIERTA[a.estado] ? "Abiertas" : "Cerradas") + "».");
-        })
-          .catch(function (e) { aviso.textContent = e.message; fila.querySelectorAll("button").forEach(function (x) { x.disabled = false; }); });
+        bloquear(true); aviso.textContent = "Guardando…";
+        marcar(a, b[0]).then(listo).catch(fallo);
       };
       fila.appendChild(btn);
     });
@@ -246,13 +290,27 @@
       a.dada_de_baja_en = estado === "dada_de_baja" ? (a.dada_de_baja_en || ahora) : null;
       return Promise.resolve();
     }
+    return rpc("marcar_alerta", { p_id: a.id, p_estado: estado }, a);
+  }
+  function anotar(a, tipo, destino, nota) {
+    var cfg = window.DOMIGUARD_CONFIG || {};
+    if (!cfg.SUPABASE_URL || /TU-PROYECTO/.test(cfg.SUPABASE_URL)) {          // demostración: solo en esta pantalla
+      var pasos = tipo === "reporte" ? { nueva: 1, enviada: 1, confirmada: 1 } : { nueva: 1, enviada: 1, confirmada: 1, en_baja: 1 };
+      var p = pasos[a.estado] ? marcar(a, tipo === "reporte" ? "en_baja" : "en_seguimiento") : Promise.resolve();
+      return p.then(function () { a._cambios.push({ en: new Date().toISOString(), evento: tipo, despues: destino, nota: nota || null, por: "demo" }); });
+    }
+    return rpc("anotar_reporte", { p_id: a.id, p_tipo: tipo, p_destino: destino, p_nota: nota }, a);
+  }
+  function rpc(nombre, cuerpo, a) {
+    var cfg = window.DOMIGUARD_CONFIG || {};
     return window.DomiguardSesion.encabezados().then(function (h) {
-      return fetch(cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/rpc/marcar_alerta", {
-        method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, h), body: JSON.stringify({ p_id: a.id, p_estado: estado })
+      return fetch(cfg.SUPABASE_URL.replace(/\/$/, "") + "/rest/v1/rpc/" + nombre, {
+        method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, h), body: JSON.stringify(cuerpo)
       });
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (d) {
-        if (!r.ok) throw new Error(/plan activo/.test(d.message || "") ? "Tu cuenta no tiene un plan activo." : "No se pudo guardar. Vuelve a intentarlo.");
+        if (!r.ok) throw new Error(/plan activo/.test(d.message || "") ? "Tu cuenta no tiene un plan activo."
+          : /300 letras/.test(d.message || "") ? "El folio o la respuesta puede tener hasta 300 letras." : "No se pudo guardar. Vuelve a intentarlo.");
         a.estado = d.estado; a.baja_pedida_en = d.baja_pedida_en; a.dada_de_baja_en = d.dada_de_baja_en;
       });
     });
