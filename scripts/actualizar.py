@@ -11,6 +11,8 @@ Corre cada hora completa y cada 5 minutos en modo rápido (--rapida: solo el pas
    y arma el paquete de evidencia.
 5. Envía a cada cliente un correo con sus alertas nuevas y un CSV adjunto.
 6. Revisa por DNS si los sitios de alertas abiertas siguen existiendo. No abre ningún sitio.
+7. Llama a la función reportar-abuso de Supabase: manda el reporte al registrador de las alertas seguras
+   (ver supabase/schema.sql). Para el filtro, guarda el registrador de los dominios oficiales de cada banco.
 
 Solo usa la biblioteca estándar de Python 3.9+.
 
@@ -424,6 +426,32 @@ def para_base(a):
     return {k: v for k, v in a.items() if not k.startswith("_")}
 
 
+# ---------- reporte al registrador ----------
+def registradores_oficiales(db, clientes):
+    """RDAP de los dominios oficiales de los bancos que todavía no tienen registrador guardado (filtro del reporte
+    automático: si una variante usa el mismo registrador que el banco, probablemente la compró el banco)."""
+    hechos = 0
+    for c in clientes:
+        if c.get("registradores"):
+            continue
+        regs = sorted({w["registrador"] for w in (D.rdap(d) for d in (c.get("dominios") or [])[:6]) if w.get("registrador")})
+        if regs:
+            db.poner_registradores(c["id"], regs)
+            c["registradores"] = regs
+            hechos += 1
+    return hechos
+
+
+def llamar_reportes(url, llave):
+    """La función reportar-abuso decide sola qué mandar (lo lee de la base); aquí solo se le avisa."""
+    h = {"apikey": llave, "Content-Type": "application/json"}
+    if llave.startswith("eyJ"):
+        h["Authorization"] = "Bearer " + llave
+    req = urllib.request.Request(url.rstrip("/") + "/functions/v1/reportar-abuso", data=b"{}", headers=h, method="POST")
+    with urllib.request.urlopen(req, timeout=90) as r:
+        return json.loads(r.read().decode("utf-8") or "{}")
+
+
 # ---------- correo ----------
 def armar_correo(cliente, alertas, remitente, destino, hoy):
     orden = {"alta": 0, "media": 1, "baja": 2}
@@ -533,6 +561,10 @@ class Base:
 
     def clientes(self):
         return self._pedir("GET", "/clientes?activo=eq.true&select=*")
+
+    def poner_registradores(self, cliente_id, registradores):
+        self._pedir("PATCH", "/clientes?id=eq." + urllib.parse.quote(cliente_id), {"registradores": registradores},
+                    {"Prefer": "return=minimal"})
 
     def contactos(self):
         out = {}
@@ -749,6 +781,19 @@ def main():
             db.guardar_dns("alertas", dns_a)
             dns_s = revisar_dns(db.para_revisar_dns("sitios", f"ultimo_dia=gte.{reciente}", 200))
             db.guardar_dns("sitios", dns_s)
+
+        # 6. reporte al registrador de las alertas seguras (si falla, la corrida sigue)
+        reportes = {}
+        try:
+            if not a.rapida:
+                n = registradores_oficiales(db, clientes)
+                if n:
+                    print(f"Registrador de los dominios oficiales guardado para {n} banco(s)")
+            reportes = llamar_reportes(url, llave)
+            print(f"Reportes al registrador ({reportes.get('modo', '?')}): {reportes.get('enviados', 0)} enviados"
+                  + (f", {reportes['fallidos']} fallaron" if reportes.get("fallidos") else ""))
+        except Exception as e:
+            print("Aviso: no se pudieron mandar los reportes al registrador:", str(e)[:200])
 
         # Se conservan los datos de la última corrida completa; un error anterior se borra porque esta salió bien.
         previo = db.estado_actual()

@@ -5,7 +5,7 @@
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
   function nf(n) { return Number(n).toLocaleString("en-US"); }
 
-  var S = { clientes: [], alertas: [], estado: null, cliente: null, filtro: "abiertas", canal: "todos", busqueda: "" };
+  var S = { clientes: [], alertas: [], estado: null, reportes: { modo: "prueba" }, cliente: null, filtro: "abiertas", canal: "todos", busqueda: "" };
   /* lo que se escribe en el buscador, sin hxxp://, sin corchetes y en minúsculas */
   function limpiarBusqueda(t) { return String(t || "").toLowerCase().trim().replace(/^h[xt]{2}ps?:\/\//, "").replace(/\[\.\]/g, ".").replace(/\/.*$/, ""); }
   var ABIERTA = { nueva: 1, enviada: 1, confirmada: 1, en_baja: 1, en_seguimiento: 1 };
@@ -33,6 +33,19 @@
   }
   /* folio del caso: DG-año de detección-número fijo que pone la base */
   function folio(a) { return a.folio ? "DG-" + String(a.creada_en).slice(0, 4) + "-" + String(a.folio).padStart(5, "0") : ""; }
+  /* reporte automático al registrador: la misma regla que reportes_pendientes en la base (schema.sql) */
+  function normReg(t) { return String(t || "").toLowerCase().replace(/\b(inc|llc|ltd|limited|corp|corporation|gmbh|co)\b/g, "").replace(/[^a-z0-9]/g, ""); }
+  function reporteAuto(a) {
+    var e = a.evidencia || {}, regs = (clienteActual() || {}).registradores || [];
+    if (a.reporte_auto_en) return "hecho";
+    if (!ABIERTA[a.estado] || (a.prioridad !== "alta" && a.estado !== "confirmada")) return null;
+    if (e.plataforma) return "plataforma";                       // la quita la plataforma, no un registrador
+    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(e.correo_abuso || "")) return "sin_correo";
+    if (!a.dns_ok) return null;                                  // ya no responde o falta revisarlo
+    var pasa = a.estado === "confirmada" || e.confirmacion !== "revisar" ||
+      (e.registrador && regs.length && regs.every(function (r) { return normReg(r) !== normReg(e.registrador); }));
+    return pasa ? "robot" : "revisar";
+  }
   function defang(a) { return (a.tls ? "hxxps://" : "hxxp://") + String(a.host || "").replace(/\./g, "[.]"); }
   function ultimoDia() {
     if (S.estado && S.estado.dia) return S.estado.dia;
@@ -86,6 +99,13 @@
     top.appendChild(el("span", "mono", defang(a)));
     if (CANAL[a.canal]) top.appendChild(el("span", "tag", CANAL[a.canal]));
     top.appendChild(el("span", "tag", e.confirmacion === "revisar" ? "Por revisar" : "Lo señala un reporte externo"));
+    var ra = reporteAuto(a), modo = S.reportes.modo;
+    if (ra === "hecho") top.appendChild(el("span", "tag", "Reportada al registrador"));
+    else if (ra === "robot" && modo === "real") top.appendChild(el("span", "tag", "El robot la reporta al registrador"));
+    else if (ra === "robot" && modo === "prueba") top.appendChild(el("span", "tag", "El robot la reportaría (modo prueba)"));
+    else if (ra === "revisar") top.appendChild(el("span", "tag", "Revisar antes de reportar"));
+    else if (ra === "plataforma") top.appendChild(el("span", "tag", "Repórtala a la plataforma"));
+    else if (ra === "sin_correo") top.appendChild(el("span", "tag", "Sin correo de abuso: repórtala a mano"));
     art.appendChild(top);
     art.appendChild(el("div", "", a.motivo || ""));
     var meta = el("div", "al-meta");
@@ -269,6 +289,10 @@
       fila.appendChild(btn);
     });
     caja.appendChild(fila); caja.appendChild(aviso);
+    var ra = reporteAuto(a);
+    if (e.correo_abuso && !e.plataforma && a.dns_ok && a.estado !== "confirmada" && ra !== "robot" && ra !== "hecho" && ABIERTA[a.estado] && S.reportes.modo !== "apagado")
+      caja.appendChild(el("p", "tiny", "Si marcas «Sí es phishing», el robot " + (S.reportes.modo === "real" ? "manda" : "mandaría (ahora está en modo prueba)") +
+                                       " el reporte al registrador en unos minutos."));
     if (a.dada_de_baja_en) caja.appendChild(el("p", "tiny", "Dada de baja el " + fmtDay(a.dada_de_baja_en) + "."));
     else if (a.baja_pedida_en && (a.estado === "en_baja" || a.estado === "en_seguimiento")) caja.appendChild(el("p", "tiny", "Pediste la baja el " + fmtDay(a.baja_pedida_en) + "."));
     return caja;
@@ -422,10 +446,14 @@
       /* el panel muestra solo lo detectado en las últimas 48 horas; las alertas anteriores siguen guardadas en la base */
       var desde = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
       return Promise.all([
-        pagina("/clientes?select=id,nombre,marca,dominios,variantes_vigiladas,destacado&activo=eq.true&id=eq." + encodeURIComponent(S.perfil.cliente_id), 0, []),
+        pagina("/clientes?select=id,nombre,marca,dominios,registradores,variantes_vigiladas,destacado&activo=eq.true&id=eq." + encodeURIComponent(S.perfil.cliente_id), 0, []),
         pagina("/alertas?select=*&cliente_id=eq." + encodeURIComponent(S.perfil.cliente_id) + "&detectada_en=gte." + encodeURIComponent(desde) + "&order=creada_en.desc", 0, []),
-        fetch(base + "/estado?id=eq.ultima&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; })
-      ]).then(function (res) { usar({ clientes: res[0], alertas: res[1], estado: res[2][0] ? res[2][0].datos : null }); });
+        fetch(base + "/estado?id=eq.ultima&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; }),
+        fetch(base + "/estado?id=eq.reportes&select=datos", { headers: h }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+      ]).then(function (res) {
+        if (res[3][0] && res[3][0].datos) S.reportes = res[3][0].datos;
+        usar({ clientes: res[0], alertas: res[1], estado: res[2][0] ? res[2][0].datos : null });
+      });
     });
   }
 

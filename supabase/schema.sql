@@ -390,3 +390,64 @@ begin
 end $$;
 revoke all on function public.anotar_reporte(text, text, text, text) from public, anon;
 grant execute on function public.anotar_reporte(text, text, text, text) to authenticated;
+
+-- Reporte automático al registrador (Edge Function reportar-abuso; el robot la llama al final de cada corrida).
+-- Se reportan solas: las que el cliente marcó «Sí es phishing» y las de prioridad alta que señala un reporte externo
+-- o que se parecen a la marca, existen ahora en DNS y tienen un registrador distinto al de los dominios oficiales
+-- del banco (si el banco compró el dominio, suele usar el mismo). Las demás se revisan a mano en el panel.
+-- Ajustes en estado (id 'reportes'): modo prueba (el correo llega al equipo, AVISOS_CORREO), real o apagado;
+-- limite_dia: correos reales por día; prueba_limite_dia y prueba_por_corrida: cuántos de prueba por día y por corrida.
+alter table alertas add column if not exists reporte_auto_en   timestamptz;   -- cuándo se mandó el reporte de verdad
+alter table alertas add column if not exists reporte_prueba_en timestamptz;   -- cuándo se mandó en modo prueba
+alter table clientes add column if not exists registradores text[] not null default '{}';  -- los pone el robot (RDAP)
+insert into estado (id, datos) values ('reportes', '{"modo": "prueba", "limite_dia": 20, "prueba_limite_dia": 6, "prueba_por_corrida": 3}')
+  on conflict (id) do nothing;
+
+create or replace function public.normalizar_registrador(t text) returns text
+language sql immutable as $$
+  select regexp_replace(regexp_replace(lower(coalesce(t, '')), '\m(inc|llc|ltd|limited|corp|corporation|gmbh|co)\M', '', 'g'), '[^a-z0-9]', '', 'g')
+$$;
+
+create or replace function public.reportes_pendientes(p_prueba boolean, p_limite int)
+returns table (id text, cliente_id text, host text, tls boolean, folio bigint, creada_en date, prioridad text, estado text,
+               evidencia jsonb, banco text, motivo_envio text)
+language sql stable security definer set search_path = public as $$
+  select a.id, a.cliente_id, a.host, a.tls, a.folio, a.creada_en, a.prioridad, a.estado, a.evidencia, c.nombre,
+         case when a.estado = 'confirmada' then 'confirmada'
+              when a.evidencia->>'confirmacion' is distinct from 'revisar' then 'fuente'
+              else 'parecido' end
+    from alertas a join clientes c on c.id = a.cliente_id
+   where a.dns_ok
+     and a.estado in ('nueva', 'enviada', 'confirmada', 'en_baja', 'en_seguimiento')
+     and a.evidencia->>'correo_abuso' ~* '^[^@[:space:]]+@[^@[:space:]]+\.[a-z]{2,}$'
+     and (case when p_prueba then a.reporte_prueba_en else a.reporte_auto_en end) is null
+     and not exists (select 1 from alertas_historial h where h.alerta_id = a.id and h.evento = 'reporte' and h.despues = 'registrador')
+     and (a.estado = 'confirmada'
+          or (a.prioridad = 'alta'
+              and (a.evidencia->>'confirmacion' is distinct from 'revisar'
+                   or (a.evidencia->>'registrador' is not null and cardinality(c.registradores) > 0
+                       and normalizar_registrador(a.evidencia->>'registrador')
+                           <> all (select normalizar_registrador(r) from unnest(c.registradores) r)))))
+   order by (a.estado = 'confirmada') desc, (a.evidencia->>'confirmacion' is distinct from 'revisar') desc, a.detectada_en desc
+   limit greatest(p_limite, 0)
+$$;
+
+-- Después de mandar el correo: en modo real queda en el historial (por = vacío: el robot) y la alerta pasa a en_baja.
+create or replace function public.marcar_reporte_auto(p_id text, p_correo text, p_prueba boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_prueba then
+    update alertas set reporte_prueba_en = now() where id = p_id;
+    return;
+  end if;
+  update alertas set reporte_auto_en = now(),
+         estado = case when estado in ('nueva', 'enviada', 'confirmada') then 'en_baja' else estado end,
+         baja_pedida_en = coalesce(baja_pedida_en, now()), dada_de_baja_en = null
+   where id = p_id;
+  insert into alertas_historial (alerta_id, cliente_id, evento, despues, nota)
+  select id, cliente_id, 'reporte', 'registrador', 'Correo automático a ' || p_correo from alertas where id = p_id;
+end $$;
+revoke all on function public.reportes_pendientes(boolean, int) from public, anon, authenticated;
+revoke all on function public.marcar_reporte_auto(text, text, boolean) from public, anon, authenticated;
+grant execute on function public.reportes_pendientes(boolean, int) to service_role;
+grant execute on function public.marcar_reporte_auto(text, text, boolean) to service_role;
