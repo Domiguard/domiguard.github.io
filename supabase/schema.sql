@@ -326,3 +326,32 @@ select a.id, a.cliente_id, x.en, x.evento, x.antes, x.despues, x.por, x.solo_fec
   ) as x(en, evento, antes, despues, por, solo_fecha)
  where x.en is not null
    and not exists (select 1 from alertas_historial h where h.alerta_id = a.id);
+
+-- Estados nuevos que marca el cliente: «Sí es phishing» (confirmada) y «Ya me respondieron» (en_seguimiento:
+-- respondieron al reporte y falta que lo retiren). Orden: nueva → confirmada → en_baja → en_seguimiento → dada_de_baja.
+alter table alertas drop constraint if exists alertas_estado_check;
+alter table alertas add constraint alertas_estado_check
+  check (estado in ('nueva','enviada','confirmada','en_baja','en_seguimiento','dada_de_baja','falsa_alarma'));
+create or replace function public.marcar_alerta(p_id text, p_estado text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare banco text; fila alertas;
+begin
+  if p_estado not in ('nueva', 'confirmada', 'en_baja', 'en_seguimiento', 'dada_de_baja', 'falsa_alarma') then
+    raise exception 'Estado no válido';
+  end if;
+  select cliente_id into banco from perfiles where user_id = auth.uid() and aprobado and cliente_id is not null;
+  if banco is null then raise exception 'Tu cuenta no tiene un plan activo'; end if;
+  update alertas set
+    estado = p_estado,
+    baja_pedida_en = case when p_estado in ('nueva', 'confirmada') then null
+                          when p_estado in ('en_baja', 'en_seguimiento', 'dada_de_baja') then coalesce(baja_pedida_en, now())
+                          else baja_pedida_en end,
+    dada_de_baja_en = case when p_estado = 'dada_de_baja' then coalesce(dada_de_baja_en, now()) else null end,
+    estado_cambiado_por = auth.uid()
+  where id = p_id and cliente_id = banco
+  returning * into fila;
+  if not found then raise exception 'Alerta no encontrada'; end if;
+  return jsonb_build_object('id', fila.id, 'estado', fila.estado, 'baja_pedida_en', fila.baja_pedida_en, 'dada_de_baja_en', fila.dada_de_baja_en);
+end $$;
+revoke all on function public.marcar_alerta(text, text) from public, anon;
+grant execute on function public.marcar_alerta(text, text) to authenticated;

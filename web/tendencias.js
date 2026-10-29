@@ -217,9 +217,10 @@
     });
     var uno = [{ k: "total", l: "Alertas", c: "--viz-1" }];
     /* estado que marcó el cliente */
-    var NOMBRE_ESTADO = { nueva: "Nueva", enviada: "Avisada", en_baja: "Pedí la baja", dada_de_baja: "Dada de baja", falsa_alarma: "Falsa alarma" };
+    var NOMBRE_ESTADO = { nueva: "Nueva", enviada: "Avisada", confirmada: "Confirmada", en_baja: "Pedí la baja", en_seguimiento: "En seguimiento",
+                          dada_de_baja: "Dada de baja", falsa_alarma: "Falsa alarma" };
     var est = {}; al.forEach(function (a) { var k = NOMBRE_ESTADO[a.estado] || a.estado || "Nueva"; est[k] = (est[k] || 0) + 1; });
-    if ($("g-estado")) barras($("g-estado"), ["Nueva", "Avisada", "Pedí la baja", "Dada de baja", "Falsa alarma"].filter(function (k) { return est[k]; })
+    if ($("g-estado")) barras($("g-estado"), ["Nueva", "Avisada", "Confirmada", "Pedí la baja", "En seguimiento", "Dada de baja", "Falsa alarma"].filter(function (k) { return est[k]; })
       .map(function (k) { return { l: k, v: { total: est[k] } }; }), uno, "Estado");
     barras($("g-edad"), Object.keys(cub).filter(function (k) { return cub[k]; }).map(function (k) { return { l: k, v: { total: cub[k] } }; }), uno, "Antigüedad");
 

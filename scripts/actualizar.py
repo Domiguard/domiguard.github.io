@@ -744,7 +744,7 @@ def main():
         dns_a = []
         if not a.rapida:
             reciente = (ahora.date() - timedelta(days=3)).isoformat()
-            abiertas = db.para_revisar_dns("alertas", "estado=in.(nueva,enviada,en_baja)")
+            abiertas = db.para_revisar_dns("alertas", "estado=in.(nueva,enviada,confirmada,en_baja,en_seguimiento)")
             dns_a = revisar_dns(abiertas)
             db.guardar_dns("alertas", dns_a)
             dns_s = revisar_dns(db.para_revisar_dns("sitios", f"ultimo_dia=gte.{reciente}", 200))

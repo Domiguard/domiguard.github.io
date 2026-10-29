@@ -8,14 +8,20 @@
   var S = { clientes: [], alertas: [], estado: null, cliente: null, filtro: "abiertas", canal: "todos", busqueda: "" };
   /* lo que se escribe en el buscador, sin hxxp://, sin corchetes y en minúsculas */
   function limpiarBusqueda(t) { return String(t || "").toLowerCase().trim().replace(/^h[xt]{2}ps?:\/\//, "").replace(/\[\.\]/g, ".").replace(/\/.*$/, ""); }
-  var ABIERTA = { nueva: 1, enviada: 1, en_baja: 1 };
-  var ESTADOS = { nueva: "Nueva", enviada: "Avisada al cliente", en_baja: "En proceso de baja", dada_de_baja: "Dada de baja", falsa_alarma: "Falsa alarma" };
+  var ABIERTA = { nueva: 1, enviada: 1, confirmada: 1, en_baja: 1, en_seguimiento: 1 };
+  var ESTADOS = { nueva: "Nueva", enviada: "Avisada al cliente", confirmada: "Confirmada como phishing", en_baja: "En proceso de baja",
+                  en_seguimiento: "Respondieron, en seguimiento", dada_de_baja: "Dada de baja", falsa_alarma: "Falsa alarma" };
   var PRIO = { alta: ["p-hi", "Prioridad alta"], media: ["p-mid", "Prioridad media"], baja: ["p-lo", "Prioridad baja"] };
   var CANAL = { reporte: "Reporte externo", busqueda: "Variante de tu dominio", nuevo_registro: "Dominio recién registrado", certificado: "Certificado nuevo" };
   var ORDEN = { alta: 0, media: 1, baja: 2 };
   var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-  function fmtDay(d) { var p = String(d).slice(0, 10).split("-"); return Number(p[2]) + " " + MESES[Number(p[1]) - 1]; }
+  /* una fecha (AAAA-MM-DD) o una hora exacta, siempre con el día de Mérida */
+  function fmtDay(d) {
+    var t = String(d);
+    if (t.length > 10 && !isNaN(new Date(t))) t = new Date(t).toLocaleDateString("en-CA", { timeZone: "America/Merida" });
+    var p = t.slice(0, 10).split("-"); return Number(p[2]) + " " + MESES[Number(p[1]) - 1];
+  }
   /* antigüedad del dominio: lo que más pesa en la prioridad de variantes y dominios nuevos */
   function antiguedad(a) {
     var r = String((a.evidencia || {}).registrado || "");
@@ -118,7 +124,7 @@
   }
 
   /* ---------- historial de la alerta (tabla alertas_historial: la escribe solo la base) ---------- */
-  var HECHO = { enviada: "El robot te avisó por correo", en_baja: "Marcada: se pidió la baja", dada_de_baja: "Marcada: ya la dieron de baja",
+  var HECHO = { enviada: "El robot te avisó por correo", confirmada: "Marcada: sí es phishing", en_seguimiento: "Marcada: ya respondieron", en_baja: "Marcada: se pidió la baja", dada_de_baja: "Marcada: ya la dieron de baja",
                 falsa_alarma: "Marcada como falsa alarma", nueva: "Volvió a «Nueva»" };
   function historial(a) {
     if (a._historial) return Promise.resolve(a._historial);
@@ -197,7 +203,7 @@
   }
 
   /* ---------- el cliente marca el estado de la alerta (función marcar_alerta de la base: solo su banco) ---------- */
-  var BOTONES = [["en_baja", "Pedí la baja"], ["dada_de_baja", "Ya la dieron de baja"], ["falsa_alarma", "Falsa alarma"], ["nueva", "Volver a nueva"]];
+  var BOTONES = [["confirmada", "Sí es phishing"], ["en_baja", "Pedí la baja"], ["en_seguimiento", "Ya me respondieron"], ["dada_de_baja", "Ya la dieron de baja"], ["falsa_alarma", "Falsa alarma"], ["nueva", "Volver a nueva"]];
   function acciones(a) {
     var caja = el("div", "marcar"), fila = el("div", "acciones");
     caja.appendChild(el("h4", "", "¿Qué hiciste con este sitio?"));
@@ -220,7 +226,7 @@
     });
     caja.appendChild(fila); caja.appendChild(aviso);
     if (a.dada_de_baja_en) caja.appendChild(el("p", "tiny", "Dada de baja el " + fmtDay(a.dada_de_baja_en) + "."));
-    else if (a.baja_pedida_en && a.estado === "en_baja") caja.appendChild(el("p", "tiny", "Pediste la baja el " + fmtDay(a.baja_pedida_en) + "."));
+    else if (a.baja_pedida_en && (a.estado === "en_baja" || a.estado === "en_seguimiento")) caja.appendChild(el("p", "tiny", "Pediste la baja el " + fmtDay(a.baja_pedida_en) + "."));
     return caja;
   }
   function avisoLista(texto) {
@@ -235,7 +241,8 @@
       (a._cambios = a._cambios || []).push({ en: ahora, evento: "estado", antes: a.estado, despues: estado, por: "demo" });
       S.perfil = S.perfil || { user_id: "demo" };
       a.estado = estado;
-      a.baja_pedida_en = estado === "nueva" ? null : (estado === "en_baja" || estado === "dada_de_baja") ? (a.baja_pedida_en || ahora) : a.baja_pedida_en;
+      a.baja_pedida_en = (estado === "nueva" || estado === "confirmada") ? null
+        : (estado === "en_baja" || estado === "en_seguimiento" || estado === "dada_de_baja") ? (a.baja_pedida_en || ahora) : a.baja_pedida_en;
       a.dada_de_baja_en = estado === "dada_de_baja" ? (a.dada_de_baja_en || ahora) : null;
       return Promise.resolve();
     }
